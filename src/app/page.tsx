@@ -1,4 +1,5 @@
 import SalesKPIs from "@/components/sales-kpis";
+import VoiceButton from "@/components/voice-button";
 
 export default function Home() {
   return (
@@ -9,11 +10,11 @@ export default function Home() {
             Dashboard conversacional
           </h1>
           <p className="text-muted-foreground">
-            Métricas de ventas en vivo. Pronto: pregúntale a los datos en voz o
-            texto.
+            Métricas de ventas en vivo. Pregúntale a los datos en voz o texto.
           </p>
         </header>
 
+        <VoiceButton />
         <SalesKPIs />
       </main>
     </div>
