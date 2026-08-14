@@ -5,7 +5,7 @@ Dashboard conversacional: en lugar de un reporte estático de Power BI, entras a
 ## Stack
 
 - **Next.js 16 (App Router)** + Tailwind CSS + Shadcn UI
-- **Supabase (PostgreSQL)** como fuente de datos, con RLS
+- **PocketBase (SQLite + API REST)** como fuente de datos, con reglas de acceso
 - **Recharts** para gráficos dinámicos
 - **Gemini Live API** (`gemini-3.1-flash-live-preview`) para voz/texto y Function Calling
 
@@ -15,7 +15,7 @@ Dashboard conversacional: en lugar de un reporte estático de Power BI, entras a
 src/
   app/          # pages y layout
   components/   # UI + componentes del dashboard
-  lib/          # utils, clientes supabase/gemini
+  lib/          # utils, clientes pocketbase/gemini
 ```
 
 ## Arquitectura de la IA (lecciones de ProOnboarding)
@@ -32,9 +32,9 @@ Ver `../GEMINI-LIVE-PLAYBOOK.md` para la bitácora completa de errores y fixes.
 
 | Variable | Propósito |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | URL del proyecto Supabase |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Anon key (público, usada en cliente con RLS) |
-| `SUPABASE_SERVICE_ROLE_KEY` | **Server-only** (nunca en cliente) |
+| `POCKETBASE_URL` | URL del server PocketBase |
+| `POCKETBASE_SUPERUSER_EMAIL` | Admin para seed/ops (server-only) |
+| `POCKETBASE_SUPERUSER_PASSWORD` | Password del admin (server-only) |
 | `GEMINI_API_KEY` | Server-only (dev) o para mint de tokens |
 
 ## Comandos
