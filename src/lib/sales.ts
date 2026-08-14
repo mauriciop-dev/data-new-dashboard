@@ -1,31 +1,24 @@
-const DUMMYJSON_URL = "https://dummyjson.com/carts?limit=100";
+const PB_URL =
+  process.env.NEXT_PUBLIC_POCKETBASE_URL || "http://127.0.0.1:8090";
 
-export interface CartProduct {
-  id: number;
+export interface SalesRow {
+  id: string;
+  cart_id: number;
+  product_rank: number;
+  product_id: number;
   title: string;
   price: number;
   quantity: number;
   total: number;
-  discountPercentage: number;
-  discountedTotal: number;
+  discount_percentage: number;
+  discounted_total: number;
   thumbnail: string;
-}
-
-export interface Cart {
-  id: number;
-  products: CartProduct[];
-  total: number;
-  discountedTotal: number;
-  userId: number;
-  totalProducts: number;
-  totalQuantity: number;
-}
-
-export interface CartsResponse {
-  carts: Cart[];
-  total: number;
-  skip: number;
-  limit: number;
+  cart_total: number;
+  cart_discounted_total: number;
+  user_id: number;
+  total_products: number;
+  total_quantity: number;
+  date: string;
 }
 
 export interface SalesMetrics {
@@ -38,8 +31,9 @@ export interface SalesMetrics {
 }
 
 export interface SalesData {
-  carts: Cart[];
+  rows: SalesRow[];
   metrics: SalesMetrics;
+  total: number;
   fetchedAt: string;
 }
 
@@ -50,27 +44,31 @@ type SalesResult =
 
 export async function fetchSalesData(): Promise<SalesResult> {
   try {
-    const res = await fetch(DUMMYJSON_URL, { cache: "no-store" });
+    const res = await fetch(
+      `${PB_URL}/api/collections/ventas/records?perPage=200`,
+      { cache: "no-store" }
+    );
 
     if (!res.ok) {
-      throw new Error(`Error de conexión: HTTP ${res.status}`);
+      throw new Error(`Error de conexión con PocketBase: HTTP ${res.status}`);
     }
 
-    const raw: CartsResponse = await res.json();
-    const carts = raw.carts ?? [];
+    const raw = await res.json();
+    const rows: SalesRow[] = raw.items ?? [];
 
-    const totalSales = raw.carts.reduce((sum, c) => sum + c.total, 0);
-    const totalDiscountedSales = raw.carts.reduce(
-      (sum, c) => sum + c.discountedTotal,
+    // Distintas órdenes = distintos cart_id
+    const cartIds = new Set(rows.map((r) => r.cart_id));
+    const totalOrders = cartIds.size;
+
+    // Ventas totales: suma del total por item (equivale a la suma de cart.total)
+    const totalSales = rows.reduce((s, r) => s + r.total, 0);
+    const totalDiscountedSales = rows.reduce(
+      (s, r) => s + r.discounted_total,
       0
     );
-    const totalOrders = raw.carts.length;
     const avgTicket = totalOrders > 0 ? totalSales / totalOrders : 0;
-    const totalItems = raw.carts.reduce((sum, c) => sum + c.totalProducts, 0);
-    const totalProductsSold = raw.carts.reduce(
-      (sum, c) => sum + c.totalQuantity,
-      0
-    );
+    const totalProductsSold = rows.reduce((s, r) => s + r.quantity, 0);
+    const totalItems = rows.length;
 
     const metrics: SalesMetrics = {
       totalSales,
@@ -83,7 +81,7 @@ export async function fetchSalesData(): Promise<SalesResult> {
 
     return {
       state: "success",
-      data: { carts, metrics, fetchedAt: new Date().toISOString() },
+      data: { rows, metrics, total: raw.totalItems ?? rows.length, fetchedAt: new Date().toISOString() },
     };
   } catch (err) {
     return {
