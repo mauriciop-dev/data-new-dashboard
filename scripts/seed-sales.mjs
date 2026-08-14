@@ -1,11 +1,18 @@
-import PocketBase from "pocketbase";
+import { createClient } from "@libsql/client";
 
-const PB_URL = process.env.NEXT_PUBLIC_POCKETBASE_URL || "http://127.0.0.1:8090";
-const PB_EMAIL = process.env.POCKETBASE_SUPERUSER_EMAIL;
-const PB_PASSWORD = process.env.POCKETBASE_SUPERUSER_PASSWORD;
+const DB_URL =
+  process.env.TURSO_DATABASE_URL ||
+  "libsql://data-ia-mauriciop-dev.aws-us-east-1.turso.io";
+const DB_TOKEN = process.env.TURSO_AUTH_TOKEN;
 
 const API_URL = "https://dummyjson.com/carts";
-const COLLECTION = "ventas";
+const TABLE = "ventas";
+
+if (!DB_TOKEN) {
+  throw new Error("Falta TURSO_AUTH_TOKEN en el entorno");
+}
+
+const db = createClient({ url: DB_URL, authToken: DB_TOKEN });
 
 function deriveDate(cartId) {
   const day = (cartId % 28) + 1;
@@ -30,47 +37,13 @@ export async function fetchAllCarts() {
   return all;
 }
 
-export async function ensureCollection(pb) {
-  const existing = await pb.collections.getFullList();
-  if (existing.some((c) => c.name === COLLECTION)) {
-    return;
-  }
-  await pb.collections.create({
-    name: COLLECTION,
-    type: "base",
-    fields: [
-      { name: "cart_id", type: "number", required: true },
-      { name: "product_rank", type: "number" },
-      { name: "product_id", type: "number" },
-      { name: "title", type: "text" },
-      { name: "price", type: "number" },
-      { name: "quantity", type: "number" },
-      { name: "total", type: "number" },
-      { name: "discount_percentage", type: "number" },
-      { name: "discounted_total", type: "number" },
-      { name: "thumbnail", type: "text" },
-      { name: "cart_total", type: "number" },
-      { name: "cart_discounted_total", type: "number" },
-      { name: "user_id", type: "number" },
-      { name: "total_products", type: "number" },
-      { name: "total_quantity", type: "number" },
-      { name: "date", type: "date" },
-    ],
-    listRule: "",
-    viewRule: "",
-    createRule: null,
-    updateRule: null,
-    deleteRule: null,
-  });
-}
-
-export async function seedSales(pb, carts) {
-  const records = [];
+export function flattenRows(carts) {
+  const rows = [];
   for (const cart of carts) {
     const date = deriveDate(cart.id);
     if (cart.products && cart.products.length > 0) {
       cart.products.forEach((p, i) => {
-        records.push({
+        rows.push({
           cart_id: cart.id,
           product_rank: i + 1,
           product_id: p.id,
@@ -91,37 +64,97 @@ export async function seedSales(pb, carts) {
       });
     }
   }
-  const total = records.length;
-  const col = pb.collection(COLLECTION);
-  for (let i = 0; i < total; i++) {
-    await col.create(records[i], { requestKey: null });
-    if ((i + 1) % 200 === 0 || i + 1 === total) {
-      console.log(`  [seed] ${i + 1}/${total} filas`);
-    }
+  return rows;
+}
+
+export async function ensureTable() {
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS ventas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cart_id INTEGER NOT NULL,
+      product_rank INTEGER,
+      product_id INTEGER,
+      title TEXT NOT NULL,
+      price REAL NOT NULL,
+      quantity INTEGER NOT NULL,
+      total REAL NOT NULL,
+      discount_percentage REAL,
+      discounted_total REAL,
+      thumbnail TEXT,
+      cart_total REAL NOT NULL,
+      cart_discounted_total REAL NOT NULL,
+      user_id INTEGER,
+      total_products INTEGER,
+      total_quantity INTEGER,
+      date TEXT NOT NULL
+    )
+  `);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_ventas_date ON ventas (date)`);
+  await db.execute(`CREATE INDEX IF NOT EXISTS idx_ventas_cart_id ON ventas (cart_id)`);
+}
+
+export async function countRows() {
+  const res = await db.execute(`SELECT COUNT(*) AS n FROM ${TABLE}`);
+  return Number(res.rows[0]?.n ?? 0);
+}
+
+export async function seedSales(rows) {
+  const total = rows.length;
+  const BATCH = 200;
+  for (let start = 0; start < total; start += BATCH) {
+    const batch = rows.slice(start, start + BATCH);
+    const values = batch.map((r) => [
+      r.cart_id,
+      r.product_rank,
+      r.product_id,
+      r.title,
+      r.price,
+      r.quantity,
+      r.total,
+      r.discount_percentage,
+      r.discounted_total,
+      r.thumbnail,
+      r.cart_total,
+      r.cart_discounted_total,
+      r.user_id,
+      r.total_products,
+      r.total_quantity,
+      r.date,
+    ]);
+    const args = values.flat();
+    const placeholders = batch
+      .map(
+        (_) =>
+          `(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+      )
+      .join(",");
+    await db.execute({
+      sql: `INSERT INTO ${TABLE} (
+        cart_id, product_rank, product_id, title, price, quantity, total,
+        discount_percentage, discounted_total, thumbnail, cart_total,
+        cart_discounted_total, user_id, total_products, total_quantity, date
+      ) VALUES ${placeholders}`,
+      args,
+    });
+    const done = Math.min(start + BATCH, total);
+    console.log(`  [seed] ${done}/${total} filas`);
   }
   return total;
 }
 
 async function main() {
-  if (!PB_EMAIL || !PB_PASSWORD) {
-    throw new Error("Faltan POCKETBASE_SUPERUSER_EMAIL/PASSWORD en .env.local");
-  }
-  const pb = new PocketBase(PB_URL);
-  await pb
-    .collection("_superusers")
-    .authWithPassword(PB_EMAIL, PB_PASSWORD);
-
   console.log("1/3 Fetching todos los carts de DummyJSON...");
   const carts = await fetchAllCarts();
   console.log(`  -> ${carts.length} carts`);
 
-  console.log("2/3 Creando/verificando colección 'ventas'...");
-  await ensureCollection(pb);
-  console.log("  -> lista");
+  console.log("2/3 Creando/verificando tabla 'ventas'...");
+  await ensureTable();
+  console.log(`  -> tabla lista (${await countRows()} filas actuales)`);
 
   console.log("3/3 Insertando registros...");
-  const total = await seedSales(pb, carts);
-  console.log(`  -> ${total} filas persistidas en la colección 'ventas'.`);
+  const rows = flattenRows(carts);
+  const total = await seedSales(rows);
+  console.log(`  -> ${total} filas persistidas en Turso (tabla 'ventas').`);
 }
 
 main().catch((err) => {
