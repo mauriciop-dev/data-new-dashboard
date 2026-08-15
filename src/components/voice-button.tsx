@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic, MicOff, Square, Loader2, MessageSquare } from "lucide-react";
+import { Mic, MicOff, Square, Loader2 } from "lucide-react";
 import { useLiveVoice } from "@/lib/use-live-voice";
 import { Button } from "@/components/ui/button";
 import DynamicChart from "@/components/dynamic-chart";
@@ -28,22 +28,8 @@ export default function VoiceButton() {
   const isOn = status === "connected";
 
   return (
-    <section className="rounded-xl border bg-card p-5 shadow-sm">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <span className="flex size-11 items-center justify-center rounded-full bg-primary text-primary-foreground">
-            <MessageSquare className="size-5" />
-          </span>
-          <div className="space-y-1">
-            <p className="text-sm font-medium leading-none">
-              Asistente de ventas
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {error ?? statusHint[status]}
-            </p>
-          </div>
-        </div>
-
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
           {isOn && (
             <Button
@@ -76,28 +62,30 @@ export default function VoiceButton() {
             )}
             {statusLabel[status]}
           </Button>
+          {!isOn && !error && (
+            <span className="text-xs text-muted-foreground">{statusHint[status]}</span>
+          )}
         </div>
+        {error && (
+          <p className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {error}
+          </p>
+        )}
       </div>
 
-      {error && (
-        <p className="mt-3 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          {error}
-        </p>
-      )}
-
       {toolResult && (
-        <div className="mt-4">
+        <div className="mt-1">
           <DynamicChart result={toolResult} />
         </div>
       )}
 
-      <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
+      <div className="my-2 flex items-center gap-3 text-xs text-muted-foreground">
         <span className="h-px flex-1 bg-border" />
         o escribí tu consulta
         <span className="h-px flex-1 bg-border" />
       </div>
 
       <ChatInput />
-    </section>
+    </div>
   );
 }
