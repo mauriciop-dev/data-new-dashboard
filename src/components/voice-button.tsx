@@ -3,8 +3,9 @@
 import { Mic, MicOff, Square, Loader2 } from "lucide-react";
 import { useLiveVoice } from "@/lib/use-live-voice";
 import { Button } from "@/components/ui/button";
-import DynamicChart from "@/components/dynamic-chart";
 import ChatInput from "@/components/chat-input";
+import { useDashboard } from "@/lib/dashboard-store";
+import { inferHighlight, chartNoteFromResult } from "@/lib/highlight";
 
 const statusLabel: Record<string, string> = {
   idle: "Iniciar conversación por voz",
@@ -21,8 +22,17 @@ const statusHint: Record<string, string> = {
 };
 
 export default function VoiceButton() {
-  const { status, error, isMuted, toolResult, start, stop, toggleMute } =
-    useLiveVoice();
+  const { setCurrentChart, setHighlight } = useDashboard();
+  const { status, error, isMuted, start, stop, toggleMute } = useLiveVoice(
+    undefined,
+    (result) => {
+      if (result.rows && result.rows.length > 0) {
+        setCurrentChart(result, chartNoteFromResult(result));
+        const h = inferHighlight(result);
+        if (h) setHighlight(h);
+      }
+    }
+  );
 
   const isBusy = status === "connecting";
   const isOn = status === "connected";
@@ -73,11 +83,10 @@ export default function VoiceButton() {
         )}
       </div>
 
-      {toolResult && (
-        <div className="mt-1">
-          <DynamicChart result={toolResult} />
-        </div>
-      )}
+      <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
+        Las gráficas que generes se muestran en el panel principal del
+        dashboard, no dentro del chat.
+      </p>
 
       <div className="my-2 flex items-center gap-3 text-xs text-muted-foreground">
         <span className="h-px flex-1 bg-border" />

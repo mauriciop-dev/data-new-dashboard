@@ -3,17 +3,12 @@
 import { useState } from "react";
 import { Send, Loader2, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import DynamicChart from "@/components/dynamic-chart";
+import { useDashboard } from "@/lib/dashboard-store";
+import type { ToolResult } from "@/lib/use-live-voice";
 
 interface ChatEntry {
   role: "user" | "assistant";
   text: string;
-  toolResult?: {
-    sql: string;
-    cols: string[];
-    rows: Record<string, unknown>[];
-    elapsedMs: number;
-  } | null;
 }
 
 export default function ChatInput() {
@@ -21,6 +16,7 @@ export default function ChatInput() {
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { setCurrentChart, setChartError } = useDashboard();
 
   const send = async () => {
     const q = input.trim();
@@ -41,14 +37,27 @@ export default function ChatInput() {
       if (!res.ok) {
         throw new Error(json?.error ?? `HTTP ${res.status}`);
       }
+
+      // El texto se queda en el chat, la gráfica va al dashboard
       setEntries((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          text: json.text ?? "",
-          toolResult: json.toolResult ?? null,
-        },
+        { role: "assistant", text: json.text ?? "" },
       ]);
+
+      const toolResult: ToolResult | null = json.toolResult ?? null;
+      if (toolResult && toolResult.rows && toolResult.rows.length > 0) {
+        setCurrentChart(
+          {
+            sql: toolResult.sql ?? "",
+            cols: toolResult.cols ?? [],
+            rows: toolResult.rows,
+            elapsedMs: toolResult.elapsedMs ?? 0,
+            ts: toolResult.ts,
+          },
+          json.text ?? "He generado esta gráfica a partir de tu consulta."
+        );
+        setChartError(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al consultar");
     } finally {
@@ -102,15 +111,11 @@ export default function ChatInput() {
                 </div>
               </div>
             ) : (
-              <div key={i} className="flex flex-col gap-2">
-                {entry.text && (
-                  <div className="max-w-[85%] rounded-2xl rounded-bl-sm bg-muted px-3 py-2 text-sm">
-                    {entry.text}
-                  </div>
-                )}
-                {entry.toolResult && (
-                  <DynamicChart result={entry.toolResult} />
-                )}
+              <div
+                key={i}
+                className="max-w-[85%] rounded-2xl rounded-bl-sm bg-muted px-3 py-2 text-sm"
+              >
+                {entry.text}
               </div>
             )
           )}

@@ -8,14 +8,14 @@ const TOOL = {
     {
       name: "query_sales",
       description:
-        "Consulta de SOLO LECTURA sobre la tabla SQLite llamada SIEMPRE 'ventas' (IMPORTANTE: la tabla se llama ventas, NUNCA 'sales', NUNCA 'products'). Esquema de ventas: id INTEGER, cart_id INTEGER, product_rank INTEGER, product_id INTEGER, title TEXT, price REAL, quantity INTEGER, total REAL (total del item), discount_percentage REAL, discounted_total REAL, thumbnail TEXT, cart_total REAL (total de TODA la orden), cart_discounted_total REAL, user_id INTEGER, total_products INTEGER, total_quantity INTEGER, date TEXT 'YYYY-MM-DD'. Una orden = un cart_id (un cart tiene varios productos, uno por fila). Ventas totales de una orden = cart_total, NO la suma de filas del mismo cart. Para numero de ordenes usa COUNT(DISTINCT cart_id). Para unidades usa SUM(quantity). Para series de tiempo agrupa por substr(date,1,7) (mes) o substr(date,1,10) (dia). Si el usuario pide ventas por categoria, NECESITAS otra columna que no existe; en su lugar agrupa por title o por mes.",
+        "Consulta de SOLO LECTURA sobre las tablas SQLite 'ventas' y 'categorias' (la tabla principal SIEMPRE es 'ventas', NUNCA 'sales', NUNCA 'products'). Esquema de ventas: id INTEGER, cart_id INTEGER, product_rank INTEGER, product_id INTEGER, title TEXT, price REAL, quantity INTEGER, total REAL (total del item), discount_percentage REAL, discounted_total REAL, thumbnail TEXT, cart_total REAL (total de TODA la orden), cart_discounted_total REAL, user_id INTEGER, total_products INTEGER, total_quantity INTEGER, date TEXT 'YYYY-MM-DD'. Una orden = un cart_id (un cart tiene varios productos, uno por fila). Ventas totales de una orden = cart_total, NO la suma de filas del mismo cart. Para numero de ordenes usa COUNT(DISTINCT cart_id). Para unidades usa SUM(quantity). Para series de tiempo agrupa por substr(date,1,7) (mes) o substr(date,1,10) (dia). Hay otra tabla 'categorias' (product_id INTEGER, categoria TEXT, subcategoria TEXT) que mapea cada product a su categoria en español (ej. 'Cocina', 'Alimentos', 'Vehículos'). UNE con LEFT JOIN categorias c ON c.product_id = v.product_id cuando el usuario pida ventas por categoria.",
       parameters: {
         type: "OBJECT",
         properties: {
           sql: {
             type: "STRING",
             description:
-              "Consulta SELECT SQLite valida sobre la tabla 'ventas' (usa el nombre ventas exactamente; GROUP BY, ORDER BY, substr, ROUND, COUNT, SUM permitidos; LIMIT recomendado ~500 filas).",
+              "Consulta SELECT SQLite valida sobre las tablas 'ventas' y 'categorias' (usa esos nombres exactamente; JOIN, GROUP BY, ORDER BY, substr, ROUND, COUNT, SUM permitidos; LIMIT recomendado ~500 filas).",
           },
         },
         required: ["sql"],
