@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { useDashboard } from "@/lib/dashboard-store";
+import { useDashboardData } from "@/lib/use-dashboard-data";
 import KpiCards from "./kpi-cards";
 import DashboardFilters, { type DashboardFilters as Filters } from "./filters";
 import {
@@ -21,6 +22,8 @@ import { TopProductsTable } from "./data-tables";
 import { cn } from "@/lib/utils";
 
 export default function DashboardView() {
+  useDashboardData();
+
   const {
     dashboard,
     dashboardError,
