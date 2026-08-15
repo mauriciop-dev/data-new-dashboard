@@ -17,20 +17,52 @@ export interface LiveVoiceResult {
   status: VoiceStatus;
   error: string | null;
   isMuted: boolean;
+  toolResult: ToolResult | null;
   start: () => Promise<void>;
   stop: () => void;
   toggleMute: () => void;
 }
 
+export interface ToolResult {
+  sql: string;
+  cols: string[];
+  rows: Record<string, unknown>[];
+  elapsedMs: number;
+  ts: string;
+}
+
 const WS_BASE =
   "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained";
 
+const QUERY_SALES_TOOL = {
+  functionDeclarations: [
+    {
+      name: "query_sales",
+      description:
+        "Ejecuta una consulta SQL de SOLO LECTURA (SELECT) contra la tabla ventas de un dashboard de comercio y devuelve las filas. Esquema: ventas(id INTEGER, cart_id INTEGER, product_rank INTEGER, product_id INTEGER, title TEXT, price REAL, quantity INTEGER, total REAL, discount_percentage REAL, discounted_total REAL, thumbnail TEXT, cart_total REAL, cart_discounted_total REAL, user_id INTEGER, total_products INTEGER, total_quantity INTEGER, date TEXT 'YYYY-MM-DD'). Una orden = un cart_id (hay varios productos por orden, uno por fila). El total de una orden es cart_total; el total de un item es total. Usa COUNT(DISTINCT cart_id) para número de órdenes, SUM(quantity) para unidades, y agrupa por substr(date,1,7) o substr(date,1,10) para series de tiempo.",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          sql: {
+            type: "STRING",
+            description:
+              "Consulta SELECT SQLite válida (GROUP BY, ORDER BY, substr, ROUND, COUNT, SUM permitidos). Devuelve maximamente ~500 filas.",
+          },
+        },
+        required: ["sql"],
+      },
+    },
+  ],
+};
+
 export function useLiveVoice(
-  onServerAudio?: (pcmBase64: string, mimeType: string) => void
+  onServerAudio?: (pcmBase64: string, mimeType: string) => void,
+  onToolResult?: (result: ToolResult) => void
 ): LiveVoiceResult {
   const [status, setStatus] = useState<VoiceStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
+  const [toolResult, setToolResult] = useState<ToolResult | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -45,10 +77,49 @@ export function useLiveVoice(
   const setupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const loggedRef = useRef<Record<string, boolean>>({});
   const statusRef = useRef<VoiceStatus>("idle");
+  const onToolResultRef = useRef(onToolResult);
   const setStatusBoth = useCallback((s: VoiceStatus) => {
     statusRef.current = s;
     setStatus(s);
   }, []);
+
+  useEffect(() => {
+    onToolResultRef.current = onToolResult;
+  }, [onToolResult]);
+
+  const runQueryTool = useCallback(
+    async (fc: { name: string; args?: Record<string, unknown>; id: string }) => {
+      const started = Date.now();
+      const sql = String(fc.args?.sql ?? "");
+      if (!sql) {
+        return { error: "Falta la consulta SQL" };
+      }
+      try {
+        const res = await fetch("/api/sql", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sql }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          return { error: json.error ?? `HTTP ${res.status}` };
+        }
+        const result: ToolResult = {
+          sql,
+          cols: json.cols ?? [],
+          rows: json.rows ?? [],
+          elapsedMs: Date.now() - started,
+          ts: new Date().toISOString(),
+        };
+        setToolResult(result);
+        onToolResultRef.current?.(result);
+        return { ok: true, ...result };
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : "Error en query" };
+      }
+    },
+    []
+  );
 
   const logOnce = useCallback((key: string, ...args: unknown[]) => {
     if (!loggedRef.current[key]) {
@@ -140,6 +211,7 @@ export function useLiveVoice(
       logOnce("ctx-rate", ctx.sampleRate);
 
       micSourceRef.current = ctx.createMediaStreamSource(stream);
+      await ctx.audioWorklet.addModule("/audio/mic-capture-processor.js");
       const silence = ctx.createGain();
       silence.gain.value = 0;
       silenceGainRef.current = silence;
@@ -162,6 +234,14 @@ export function useLiveVoice(
                   prebuiltVoiceConfig: { voiceName: "Kore" },
                 },
               },
+            },
+            tools: [QUERY_SALES_TOOL],
+            systemInstruction: {
+              parts: [
+                {
+                  text: "Eres un analista de ventas de un dashboard conversacional. Cuando el usuario pida métricas, datos o gráficos, usa la herramienta query_sales con SQL sobre la tabla ventas. Una orden es un cart_id; no sumes total de filas como ventas totales: usa SUM(cart_total) DISTINCT por orden o agrega por orden. Responde siempre con una conclusión breve de negocio, no leas todos los números. Idioma: conciso.",
+                },
+              ],
             },
           },
         });
@@ -213,6 +293,20 @@ export function useLiveVoice(
           setStatusBoth("error");
         }
 
+        if (msg.toolCall?.functionCalls?.length) {
+          const functionResponses = [];
+          for (const fc of msg.toolCall.functionCalls) {
+            logOnce("tool-call", fc.name, JSON.stringify(fc.args ?? {}).slice(0, 120));
+            const result = await runQueryTool(fc);
+            functionResponses.push({
+              name: fc.name,
+              id: fc.id,
+              response: { result },
+            });
+          }
+          sendJson({ toolResponse: { functionResponses } });
+        }
+
         if (msg.serverContent?.modelTurn?.parts) {
           for (const part of msg.serverContent.modelTurn.parts) {
             const inline = part.inlineData;
@@ -239,16 +333,9 @@ export function useLiveVoice(
         setStatusBoth("error");
       });
 
-      const processor = ctx.createScriptProcessor(1024, 1, 1);
-      processor.onaudioprocess = (e) => {
-        const input = e.inputBuffer.getChannelData(0);
-        const pcm = new Int16Array(input.length);
-        let peak = 0;
-        for (let i = 0; i < input.length; i++) {
-          const s = Math.max(-1, Math.min(1, input[i]));
-          peak = Math.max(peak, Math.abs(s));
-          pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-        }
+      const processor = new AudioWorkletNode(ctx, "mic-capture");
+      processor.port.onmessage = (e) => {
+        const { pcm, peak } = e.data as { pcm: Int16Array; peak: number };
         if (peak > 0.01) {
           logOnce("mic-peak", peak.toFixed(3));
         }
@@ -277,7 +364,7 @@ export function useLiveVoice(
       setError(err instanceof Error ? err.message : "Error al iniciar voz");
       setStatusBoth("error");
     }
-  }, [playPcm16, sendJson, status, setStatusBoth]);
+  }, [playPcm16, sendJson, status, setStatusBoth, runQueryTool]);
 
   const stop = useCallback(() => {
     if (setupTimeoutRef.current) {
@@ -332,7 +419,7 @@ export function useLiveVoice(
     };
   }, []);
 
-  return { status, error, isMuted, start, stop, toggleMute };
+  return { status, error, isMuted, toolResult, start, stop, toggleMute };
 }
 
 function pcmToBase64(pcm: Int16Array): string {
