@@ -1,0 +1,278 @@
+import { getDb } from "@/lib/turso";
+
+const MODEL = process.env.LIVE_MODEL || "gemini-3.1-flash-live-preview";
+const WS_URL =
+  "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained";
+
+const TOOL = {
+  functionDeclarations: [
+    {
+      name: "query_sales",
+      description:
+        "Consulta de SOLO LECTURA sobre la tabla SQLite llamada SIEMPRE 'ventas' (IMPORTANTE: la tabla se llama ventas, NUNCA 'sales', NUNCA 'products'). Esquema de ventas: id INTEGER, cart_id INTEGER, product_rank INTEGER, product_id INTEGER, title TEXT, price REAL, quantity INTEGER, total REAL (total del item), discount_percentage REAL, discounted_total REAL, thumbnail TEXT, cart_total REAL (total de TODA la orden), cart_discounted_total REAL, user_id INTEGER, total_products INTEGER, total_quantity INTEGER, date TEXT 'YYYY-MM-DD'. Una orden = un cart_id (un cart tiene varios productos, uno por fila). Ventas totales de una orden = cart_total, NO la suma de filas del mismo cart. Para numero de ordenes usa COUNT(DISTINCT cart_id). Para unidades usa SUM(quantity). Para series de tiempo agrupa por substr(date,1,7) (mes) o substr(date,1,10) (dia). Si el usuario pide ventas por categoria, NECESITAS otra columna que no existe; en su lugar agrupa por title o por mes.",
+      parameters: {
+        type: "OBJECT",
+        properties: {
+          sql: {
+            type: "STRING",
+            description:
+              "Consulta SELECT SQLite valida sobre la tabla 'ventas' (usa el nombre ventas exactamente; GROUP BY, ORDER BY, substr, ROUND, COUNT, SUM permitidos; LIMIT recomendado ~500 filas).",
+          },
+        },
+        required: ["sql"],
+      },
+    },
+  ],
+};
+
+const FORBIDDEN =
+  /\b(ALTER|ATTACH|CREATE|DELETE|DETACH|DROP|INSERT|PRAGMA|REINDEX|UPDATE|VACUUM)\b/i;
+
+function normalizeSql(raw: string): string {
+  let s = raw;
+  s = s.replace(/\/\*[\s\S]*?\*\//g, " ");
+  s = s.replace(/--[^\n]*/g, " ");
+  s = s.replace(/;/g, " ");
+  return s.trim();
+}
+
+async function mintToken(): Promise<string> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("Falta GEMINI_API_KEY en el servidor");
+  const now = new Date();
+  const res = await fetch(
+    "https://generativelanguage.googleapis.com/v1alpha/auth_tokens",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({
+        uses: 5,
+        expireTime: new Date(now.getTime() + 30 * 60 * 1000).toISOString(),
+        newSessionExpireTime: new Date(
+          now.getTime() + 2 * 60 * 1000
+        ).toISOString(),
+      }),
+    }
+  );
+  const txt = await res.text();
+  if (!res.ok) {
+    throw new Error(`auth_tokens ${res.status}: ${txt.slice(0, 300)}`);
+  }
+  return JSON.parse(txt).name;
+}
+
+type QueryOk = {
+  ok: true;
+  sql: string;
+  cols: string[];
+  rows: Record<string, unknown>[];
+  elapsedMs: number;
+};
+type QueryErr = { ok: false; sql: string; error: string };
+type QueryResult = QueryOk | QueryErr;
+
+async function runQuerySql(sql: string): Promise<QueryResult> {
+  const normalized = normalizeSql(String(sql ?? ""));
+  const started = Date.now();
+  try {
+    const db = getDb();
+    const res = await db.execute(normalized);
+    const safe = (v: unknown): unknown => {
+      if (typeof v === "bigint") return Number(v);
+      if (v instanceof Uint8Array) return Buffer.from(v).toString("base64");
+      return v;
+    };
+    const rows = res.rows.map((r) => {
+      const obj: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(r)) obj[k] = safe(v);
+      return obj;
+    });
+    return {
+      ok: true,
+      sql,
+      cols: res.columns,
+      rows,
+      elapsedMs: Date.now() - started,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Error ejecutando SQL";
+    if (/no such table/i.test(msg)) {
+      return {
+        ok: false,
+        sql,
+        error:
+          "La tabla no existe. La unica tabla disponible se llama 'ventas'. Reintenta el SELECT usando 'ventas' (no 'sales', no 'products').",
+      };
+    }
+    return { ok: false, sql, error: msg };
+  }
+}
+
+interface ChatOut {
+  text: string;
+  toolResult: {
+    sql: string;
+    cols: string[];
+    rows: Record<string, unknown>[];
+    elapsedMs: number;
+  } | null;
+}
+
+function runChatWithToken(question: string, token: string): Promise<ChatOut> {
+  return new Promise((resolve, reject) => {
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(
+        `${WS_URL}?access_token=${encodeURIComponent(token)}`
+      );
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error("No WebSocket"));
+      return;
+    }
+
+    const out: ChatOut = { text: "", toolResult: null };
+    let answered = false;
+    let sentPrompt = false;
+
+    const timeout = setTimeout(() => {
+      finish(new Error("TIMEOUT"));
+    }, 45000);
+
+    function finish(err: Error | null) {
+      if (answered) return;
+      answered = true;
+      clearTimeout(timeout);
+      try {
+        ws.close();
+      } catch {}
+      if (err) reject(err);
+      else resolve(out);
+    }
+
+    ws.onopen = () => {
+      ws.send(
+        JSON.stringify({
+          setup: {
+            model: `models/${MODEL}`,
+            generationConfig: {
+              responseModalities: ["TEXT"],
+            },
+            tools: [TOOL],
+            systemInstruction: {
+              parts: [
+                {
+                  text: "Eres un analista de ventas de un dashboard. Cuando el usuario pida metricas, datos o graficos, usa SIEMPRE la herramienta query_sales y espera su resultado antes de responder. Una orden es un cart_id; para ventas totales usa SUM(cart_total). La tabla se llama 'ventas'. Responde con una conclusion breve de negocio, en el idioma del usuario, conciso y sin listar todos los numeros.",
+                },
+              ],
+            },
+          },
+        })
+      );
+    };
+
+    ws.onmessage = async (ev) => {
+      try {
+        let data: Buffer;
+        if (typeof ev.data === "string") {
+          data = Buffer.from(ev.data);
+        } else if (ev.data instanceof Blob) {
+          data = Buffer.from(await ev.data.arrayBuffer());
+        } else if (ev.data instanceof ArrayBuffer) {
+          data = Buffer.from(ev.data);
+        } else {
+          data = Buffer.from(ev.data as ArrayBuffer);
+        }
+        const msg = JSON.parse(data.toString());
+
+        if (msg.setupComplete && !sentPrompt) {
+          sentPrompt = true;
+          ws.send(
+            JSON.stringify({
+              clientContent: {
+                turns: [{ role: "user", parts: [{ text: question }] }],
+                turnComplete: true,
+              },
+            })
+          );
+        }
+
+        if (msg.error) {
+          finish(new Error(JSON.stringify(msg.error).slice(0, 400)));
+        }
+
+        if (msg.toolCall?.functionCalls?.length) {
+          for (const fc of msg.toolCall.functionCalls) {
+            const result = await runQuerySql(
+              String(fc.args?.sql ?? "")
+            );
+            if (result.ok) out.toolResult = result;
+            ws.send(
+              JSON.stringify({
+                toolResponse: {
+                  functionResponses: [
+                    {
+                      name: fc.name,
+                      id: fc.id,
+                      response: { result },
+                    },
+                  ],
+                },
+              })
+            );
+          }
+        }
+
+        if (msg.serverContent?.modelTurn?.parts) {
+          const textParts = msg.serverContent.modelTurn.parts.filter(
+            (p: { text?: string }) => p.text
+          );
+          if (textParts.length) {
+            out.text += textParts.map((p: { text: string }) => p.text).join("");
+            // Si llegamos a texto del modelo tras haber pasado por la tool call,
+            // consideramos la respuesta final.
+            if (msg.serverContent.turnComplete) {
+              finish(null);
+            }
+          }
+        }
+      } catch (err) {
+        finish(err instanceof Error ? err : new Error("parse"));
+      }
+    };
+
+    ws.onerror = () => {
+      finish(new Error("WebSocket error"));
+    };
+
+    ws.onclose = () => {
+      finish(null);
+    };
+  });
+}
+
+export async function POST(request: Request) {
+  let question: string;
+  try {
+    const body = await request.json();
+    question = typeof body?.question === "string" ? body.question.trim() : "";
+  } catch {
+    return Response.json({ error: "JSON inválido" }, { status: 400 });
+  }
+  if (!question) {
+    return Response.json({ error: "Falta la pregunta" }, { status: 400 });
+  }
+  if (question.length > 2000) {
+    return Response.json({ error: "Pregunta demasiado larga" }, { status: 400 });
+  }
+
+  try {
+    const token = await mintToken();
+    const out = await runChatWithToken(question, token);
+    return Response.json(out);
+  } catch (err) {
+    return Response.json(
+      { error: err instanceof Error ? err.message : "Error en chat" },
+      { status: 500 }
+    );
+  }
+}

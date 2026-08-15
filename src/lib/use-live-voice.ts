@@ -28,7 +28,7 @@ export interface ToolResult {
   cols: string[];
   rows: Record<string, unknown>[];
   elapsedMs: number;
-  ts: string;
+  ts?: string;
 }
 
 const WS_BASE =

@@ -4,6 +4,7 @@ import { Mic, MicOff, Square, Loader2, MessageSquare } from "lucide-react";
 import { useLiveVoice } from "@/lib/use-live-voice";
 import { Button } from "@/components/ui/button";
 import DynamicChart from "@/components/dynamic-chart";
+import ChatInput from "@/components/chat-input";
 
 const statusLabel: Record<string, string> = {
   idle: "Iniciar conversación por voz",
@@ -89,6 +90,14 @@ export default function VoiceButton() {
           <DynamicChart result={toolResult} />
         </div>
       )}
+
+      <div className="my-4 flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        o escribí tu consulta
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <ChatInput />
     </section>
   );
 }
