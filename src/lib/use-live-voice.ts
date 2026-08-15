@@ -39,14 +39,14 @@ const QUERY_SALES_TOOL = {
     {
       name: "query_sales",
       description:
-        "Ejecuta una consulta SQL de SOLO LECTURA (SELECT) contra la tabla ventas de un dashboard de comercio y devuelve las filas. Esquema: ventas(id INTEGER, cart_id INTEGER, product_rank INTEGER, product_id INTEGER, title TEXT, price REAL, quantity INTEGER, total REAL, discount_percentage REAL, discounted_total REAL, thumbnail TEXT, cart_total REAL, cart_discounted_total REAL, user_id INTEGER, total_products INTEGER, total_quantity INTEGER, date TEXT 'YYYY-MM-DD'). Una orden = un cart_id (hay varios productos por orden, uno por fila). El total de una orden es cart_total; el total de un item es total. Usa COUNT(DISTINCT cart_id) para número de órdenes, SUM(quantity) para unidades, y agrupa por substr(date,1,7) o substr(date,1,10) para series de tiempo.",
+        "Consulta de SOLO LECTURA sobre la tabla SQLite llamada SIEMPRE 'ventas' (IMPORTANTE: la tabla se llama ventas, NUNCA 'sales', NUNCA 'products'). Esquema de ventas: id INTEGER, cart_id INTEGER, product_rank INTEGER, product_id INTEGER, title TEXT, price REAL, quantity INTEGER, total REAL (total del item), discount_percentage REAL, discounted_total REAL, thumbnail TEXT, cart_total REAL (total de TODA la orden), cart_discounted_total REAL, user_id INTEGER, total_products INTEGER, total_quantity INTEGER, date TEXT 'YYYY-MM-DD'. Una orden = un cart_id (un cart tiene varios productos, uno por fila). Ventas totales de una orden = cart_total, NO la suma de filas del mismo cart. Para numero de ordenes usa COUNT(DISTINCT cart_id). Para unidades usa SUM(quantity). Para series de tiempo agrupa por substr(date,1,7) (mes) o substr(date,1,10) (dia). Si el usuario pide ventas por categoria, NECESITAS otra columna que no existe; en su lugar agrupa por title o por mes.",
       parameters: {
         type: "OBJECT",
         properties: {
           sql: {
             type: "STRING",
             description:
-              "Consulta SELECT SQLite válida (GROUP BY, ORDER BY, substr, ROUND, COUNT, SUM permitidos). Devuelve maximamente ~500 filas.",
+              "Consulta SELECT SQLite valida sobre la tabla 'ventas' (usa el nombre ventas exactamente; GROUP BY, ORDER BY, substr, ROUND, COUNT, SUM permitidos; LIMIT recomendado ~500 filas).",
           },
         },
         required: ["sql"],
@@ -102,7 +102,15 @@ export function useLiveVoice(
         });
         const json = await res.json();
         if (!res.ok) {
-          return { error: json.error ?? `HTTP ${res.status}` };
+          const msg = json.error ?? `HTTP ${res.status}`;
+          // Autocorrección: si usa una tabla que no existe, indicarle cuál es la correcta
+          if (/no such table/i.test(String(msg))) {
+            return {
+              error:
+                "La tabla no existe. La unica tabla disponible se llama 'ventas'. Reintenta el SELECT usando 'ventas' como nombre de tabla (no 'sales', no 'products').",
+            };
+          }
+          return { error: msg };
         }
         const result: ToolResult = {
           sql,
