@@ -1,7 +1,16 @@
 import { getDb } from "@/lib/turso";
 
 const ALLOWED_KEYWORDS = /^\s*(SELECT|WITH|EXPLAIN)/i;
-const FORBIDDEN = /(--|;|\b(DELETE|INSERT|UPDATE|DROP|ALTER|CREATE|ATTACH|DETACH|REINDEX|VACUUM|PRAGMA)\b)/i;
+const FORBIDDEN =
+  /\b(ALTER|ATTACH|CREATE|DELETE|DETACH|DROP|INSERT|PRAGMA|REINDEX|UPDATE|VACUUM)\b/i;
+
+function normalizeSql(raw: string): string {
+  let s = raw;
+  s = s.replace(/\/\*[\s\S]*?\*\//g, " ");
+  s = s.replace(/--[^\n]*/g, " ");
+  s = s.replace(/;/g, " ");
+  return s.trim();
+}
 
 export async function POST(request: Request) {
   let sql: string;
@@ -16,13 +25,17 @@ export async function POST(request: Request) {
   if (!trimmed) {
     return Response.json({ error: "Falta la consulta SQL" }, { status: 400 });
   }
-  if (!ALLOWED_KEYWORDS.test(trimmed)) {
+  const normalized = normalizeSql(trimmed);
+  if (!normalized) {
+    return Response.json({ error: "Falta la consulta SQL" }, { status: 400 });
+  }
+  if (!ALLOWED_KEYWORDS.test(normalized)) {
     return Response.json(
       { error: "Solo se permiten consultas SELECT de solo lectura" },
       { status: 400 }
     );
   }
-  if (FORBIDDEN.test(trimmed)) {
+  if (FORBIDDEN.test(normalized)) {
     return Response.json(
       { error: "La consulta contiene operaciones no permitidas" },
       { status: 400 }
@@ -31,7 +44,7 @@ export async function POST(request: Request) {
 
   try {
     const db = getDb();
-    const res = await db.execute(trimmed);
+    const res = await db.execute(normalized);
     const safe = (v: unknown): unknown => {
       if (typeof v === "bigint") return Number(v);
       if (v instanceof Uint8Array) return Buffer.from(v).toString("base64");
