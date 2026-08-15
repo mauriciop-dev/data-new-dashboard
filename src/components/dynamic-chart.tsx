@@ -18,11 +18,11 @@ import {
 import type { ToolResult } from "@/lib/use-live-voice";
 
 const COLORS = [
-  "hsl(var(--chart-1))",
-  "hsl(var(--chart-2))",
-  "hsl(var(--chart-3))",
-  "hsl(var(--chart-4))",
-  "hsl(var(--chart-5))",
+  "hsl(221 83% 53%)",
+  "hsl(160 84% 39%)",
+  "hsl(30 100% 50%)",
+  "hsl(262 83% 58%)",
+  "hsl(340 82% 52%)",
 ];
 
 function isNumericCol(rows: Record<string, unknown>[], key: string): boolean {
@@ -70,8 +70,12 @@ export default function DynamicChart({ result }: { result: ToolResult }) {
         <span className="text-xs text-muted-foreground">{rows.length} resultados</span>
       </div>
 
-      <div className="h-64">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="h-64 w-full">
+        <ResponsiveContainer
+          key={`${type}-${rows.length}-${String(rows[0]?.[labelCol] ?? "")}`}
+          width="100%"
+          height="100%"
+        >
           {type === "pie" ? (
             <PieChart>
               <Pie
@@ -108,7 +112,8 @@ export default function DynamicChart({ result }: { result: ToolResult }) {
                   dataKey={c}
                   stroke={COLORS[i % COLORS.length]}
                   strokeWidth={2}
-                  dot={{ r: 2 }}
+                  dot={{ r: 3, strokeWidth: 0 }}
+                  isAnimationActive={false}
                 />
               ))}
             </LineChart>
@@ -124,6 +129,7 @@ export default function DynamicChart({ result }: { result: ToolResult }) {
                   dataKey={c}
                   fill={COLORS[i % COLORS.length]}
                   radius={[4, 4, 0, 0]}
+                  isAnimationActive={false}
                 />
               ))}
             </BarChart>
