@@ -64,10 +64,14 @@ export default function DynamicChart({ result }: { result: ToolResult }) {
   const valueKey = numericCols[0];
 
   return (
-    <div className="rounded-lg border bg-card p-6">
+    <div className="rounded-lg border bg-card p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-medium">{graph.chartTitle}</h2>
-        <span className="text-xs text-muted-foreground">{rows.length} resultados</span>
+        <h2 className="font-mono text-xs text-muted-foreground">
+          {graph.chartTitle}
+        </h2>
+        <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          {rows.length} resultados
+        </span>
       </div>
 
       <div className="h-64 w-full">
