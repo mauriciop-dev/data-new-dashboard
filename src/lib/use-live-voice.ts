@@ -42,6 +42,20 @@ export function useLiveVoice(
   const mutedRef = useRef(false);
   const clockRef = useRef<AudioContext | null>(null);
   const onServerAudioRef = useRef(onServerAudio);
+  const setupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loggedRef = useRef<Record<string, boolean>>({});
+  const statusRef = useRef<VoiceStatus>("idle");
+  const setStatusBoth = useCallback((s: VoiceStatus) => {
+    statusRef.current = s;
+    setStatus(s);
+  }, []);
+
+  const logOnce = useCallback((key: string, ...args: unknown[]) => {
+    if (!loggedRef.current[key]) {
+      loggedRef.current[key] = true;
+      console.debug(`[live-voice] ${key}`, ...args);
+    }
+  }, []);
 
   const sendJson = useCallback((msg: unknown) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -85,7 +99,7 @@ export function useLiveVoice(
 
   const start = useCallback(async () => {
     setError(null);
-    setStatus("connecting");
+    setStatusBoth("connecting");
 
     try {
       const tokenRes = await fetch("/api/voice-token");
@@ -99,19 +113,31 @@ export function useLiveVoice(
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           channelCount: 1,
-          sampleRate: 16000,
           echoCancellation: true,
           noiseSuppression: true,
+          autoGainControl: true,
         },
       });
       streamRef.current = stream;
 
       const AudioCtx =
         window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      const ctx = new AudioCtx();
+      const ctx = new AudioCtx({
+        sampleRate: 16000,
+        latencyHint: "interactive",
+      });
       ctxRef.current = ctx;
       clockRef.current = ctx;
-      await ctx.resume();
+      if (ctx.state === "suspended") {
+        await ctx.resume();
+      }
+      ctx.onstatechange = () => {
+        logOnce("ctx-state", ctx.state);
+        if (ctx.state === "suspended") {
+          void ctx.resume();
+        }
+      };
+      logOnce("ctx-rate", ctx.sampleRate);
 
       micSourceRef.current = ctx.createMediaStreamSource(stream);
       const silence = ctx.createGain();
@@ -141,6 +167,16 @@ export function useLiveVoice(
         });
       });
 
+      setupTimeoutRef.current = setTimeout(() => {
+        if (statusRef.current === "connecting") {
+          setError("Sin respuesta del servidor (timeout tras 20s)");
+          setStatusBoth("error");
+          try {
+            ws.close();
+          } catch {}
+        }
+      }, 20000);
+
       ws.addEventListener("message", async (event) => {
         let text: string;
         if (typeof event.data === "string") {
@@ -153,7 +189,9 @@ export function useLiveVoice(
         const msg = JSON.parse(text);
 
         if (msg.setupComplete) {
-          setStatus("connected");
+          if (setupTimeoutRef.current) clearTimeout(setupTimeoutRef.current);
+          logOnce("setup-complete", true);
+          setStatusBoth("connected");
           const buffered = startBufferRef.current.splice(0);
           for (const { data: b64, mimeType } of buffered) {
             if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -164,17 +202,22 @@ export function useLiveVoice(
               );
             }
           }
+          // Marcar turno del modelo para que responda en voz
+          sendJson({
+            realtimeInput: { audio: { data: "", mimeType: "audio/pcm;rate=16000" } },
+          });
         }
 
         if (msg.error) {
           setError(msg.error.message ?? JSON.stringify(msg.error));
-          setStatus("error");
+          setStatusBoth("error");
         }
 
         if (msg.serverContent?.modelTurn?.parts) {
           for (const part of msg.serverContent.modelTurn.parts) {
             const inline = part.inlineData;
             if (inline?.data) {
+              logOnce("server-audio", inline.mimeType, inline.data.length);
               playPcm16(inline.data, inline.mimeType ?? "audio/pcm;rate=24000");
               onServerAudioRef.current?.(inline.data, inline.mimeType ?? "audio/pcm;rate=24000");
             }
@@ -183,22 +226,31 @@ export function useLiveVoice(
       });
 
       ws.addEventListener("close", () => {
-        if (status !== "error") {
-          setStatus("idle");
+        if (setupTimeoutRef.current) {
+          clearTimeout(setupTimeoutRef.current);
+          setupTimeoutRef.current = null;
+        }
+        if (statusRef.current !== "error") {
+          setStatusBoth("idle");
         }
       });
       ws.addEventListener("error", () => {
         setError("Error de conexión con Gemini Live");
-        setStatus("error");
+        setStatusBoth("error");
       });
 
-      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      const processor = ctx.createScriptProcessor(1024, 1, 1);
       processor.onaudioprocess = (e) => {
         const input = e.inputBuffer.getChannelData(0);
         const pcm = new Int16Array(input.length);
+        let peak = 0;
         for (let i = 0; i < input.length; i++) {
           const s = Math.max(-1, Math.min(1, input[i]));
+          peak = Math.max(peak, Math.abs(s));
           pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+        }
+        if (peak > 0.01) {
+          logOnce("mic-peak", peak.toFixed(3));
         }
         const b64 = pcmToBase64(pcm);
 
@@ -216,13 +268,22 @@ export function useLiveVoice(
       };
       micSourceRef.current.connect(processor);
       processor.connect(ctx.destination);
+
+      // Pedir saludo para forzar primer serverTurn
+      sendJson({
+        realtimeInput: { audio: { data: "", mimeType: "audio/pcm;rate=16000" } },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al iniciar voz");
-      setStatus("error");
+      setStatusBoth("error");
     }
-  }, [playPcm16, sendJson, status]);
+  }, [playPcm16, sendJson, status, setStatusBoth]);
 
   const stop = useCallback(() => {
+    if (setupTimeoutRef.current) {
+      clearTimeout(setupTimeoutRef.current);
+      setupTimeoutRef.current = null;
+    }
     try {
       wsRef.current?.close();
     } catch {}
@@ -247,8 +308,8 @@ export function useLiveVoice(
     ctxRef.current = null;
     clockRef.current = null;
     nextPlayTimeRef.current = 0;
-    setStatus("idle");
-  }, []);
+    setStatusBoth("idle");
+  }, [setStatusBoth]);
 
   const toggleMute = useCallback(() => {
     mutedRef.current = !mutedRef.current;
@@ -257,6 +318,10 @@ export function useLiveVoice(
 
   useEffect(() => {
     return () => {
+      if (setupTimeoutRef.current) {
+        clearTimeout(setupTimeoutRef.current);
+        setupTimeoutRef.current = null;
+      }
       try {
         wsRef.current?.close();
       } catch {}
