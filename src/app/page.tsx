@@ -5,6 +5,7 @@ import { X, Activity } from "lucide-react";
 import { DashboardProvider } from "@/lib/dashboard-store";
 import DashboardView from "@/components/dashboard/dashboard-view";
 import VoiceButton from "@/components/voice-button";
+import VoiceBar from "@/components/voice-bar";
 import ThreeBackground from "@/components/three-background";
 import { Button } from "@/components/ui/button";
 
@@ -72,6 +73,7 @@ function Dashboard({ setChatOpen }: { setChatOpen: (v: boolean) => void }) {
               <span className="size-2 animate-pulse rounded-full bg-emerald-500" />
               Conectado a tus datos
             </span>
+            <VoiceBar />
             <Button
               onClick={() => setChatOpen(true)}
               className="sm:hidden"
