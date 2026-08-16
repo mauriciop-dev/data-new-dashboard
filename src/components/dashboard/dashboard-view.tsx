@@ -42,12 +42,8 @@ export default function DashboardView() {
 
   const mainSeries = useMemo(() => {
     if (!dashboard) return { name: "", data: [] as Record<string, string | number>[] };
-    let data = dashboard.mainSeries.data;
-    if (filters.month) {
-      data = data.filter((d) => d.month === filters.month);
-    }
-    return { name: dashboard.mainSeries.name, data };
-  }, [dashboard, filters.month]);
+    return { name: dashboard.mainSeries.name, data: dashboard.mainSeries.data };
+  }, [dashboard]);
 
   const categorySeries = useMemo(() => {
     if (!dashboard) return { name: "", data: [] as Record<string, string | number>[] };
@@ -145,7 +141,7 @@ export default function DashboardView() {
         {showGeneratedChart ? (
           <DynamicMainChart result={currentChart} />
         ) : (
-          <MainTrendChart series={mainSeries} />
+          <MainTrendChart series={mainSeries} activeKey={filters.month} />
         )}
       </section>
 

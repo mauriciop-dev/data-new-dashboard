@@ -44,10 +44,27 @@ function isNumericCol(rows: Record<string, unknown>[], key: string): boolean {
   return rows.some((r) => typeof r[key] === "number");
 }
 
-export function MainTrendChart({ series }: { series: ChartSeries }) {
+export function MainTrendChart({
+  series,
+  activeKey,
+}: { series: ChartSeries; activeKey?: string | null }) {
   const keys = Object.keys(series.data[0] ?? {}).filter(
     (k) => k !== "month" && k !== "name"
   );
+
+  const renderDot = (props: any) => {
+    const isActive = activeKey && props.payload?.month === activeKey;
+    return (
+      <circle
+        cx={props.cx}
+        cy={props.cy}
+        r={isActive ? 6 : 3}
+        stroke={isActive ? "hsl(160 84% 39%)" : props.stroke}
+        strokeWidth={isActive ? 3 : 0}
+        fill="white"
+      />
+    );
+  };
 
   return (
     <div className="h-72 w-full">
@@ -75,7 +92,7 @@ export function MainTrendChart({ series }: { series: ChartSeries }) {
               strokeWidth={2}
               fill={k === "Ventas" ? "url(#gradSales)" : "transparent"}
               fillOpacity={k === "Ventas" ? 1 : 0}
-              dot={{ r: 3, strokeWidth: 0 }}
+              dot={renderDot}
               isAnimationActive={false}
             />
           ))}

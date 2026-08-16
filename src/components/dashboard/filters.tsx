@@ -65,7 +65,7 @@ export default function DashboardFilters({
         >
           Todas
         </button>
-        {categories.slice(0, 12).map((c) => (
+        {categories.map((c) => (
           <button
             key={c}
             onClick={() => toggle("category", c, value.category)}
