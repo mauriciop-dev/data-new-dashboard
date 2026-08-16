@@ -83,9 +83,9 @@ function Dashboard({ setChatOpen }: { setChatOpen: (v: boolean) => void }) {
         </div>
       </header>
 
-      {/* Scrollable dashboard content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
+      {/* Contenido que llena la pantalla (sin scroll, tipo Power BI) */}
+      <div className="min-h-0 flex-1">
+        <div className="mx-auto h-full w-full max-w-7xl px-4 py-4 sm:px-6">
           <DashboardView />
         </div>
       </div>

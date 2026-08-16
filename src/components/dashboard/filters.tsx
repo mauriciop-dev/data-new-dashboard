@@ -44,20 +44,20 @@ export default function DashboardFilters({
   const active = value.category ?? value.month ?? null;
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
+    <div className="flex w-full items-center gap-3 overflow-x-auto pb-1">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <SlidersHorizontal className="size-4" />
-        <span className="font-medium">Filtros</span>
+        <SlidersHorizontal className="size-4 shrink-0" />
+        <span className="whitespace-nowrap font-medium">Filtros</span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-card p-1.5">
+      <div className="flex items-center gap-1.5 overflow-x-auto rounded-lg border bg-card p-1.5">
         <span className="px-1 text-[10px] font-semibold uppercase text-muted-foreground">
           Categoría
         </span>
         <button
           onClick={() => onChange({ ...value, category: null })}
           className={cn(
-            "rounded-md px-2.5 py-1 text-xs transition",
+            "whitespace-nowrap rounded-md px-2.5 py-1 text-xs transition",
             value.category === null
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:bg-muted"
@@ -70,7 +70,7 @@ export default function DashboardFilters({
             key={c}
             onClick={() => toggle("category", c, value.category)}
             className={cn(
-              "rounded-md px-2.5 py-1 text-xs transition",
+              "whitespace-nowrap rounded-md px-2.5 py-1 text-xs transition",
               value.category === c
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-muted"
@@ -81,7 +81,7 @@ export default function DashboardFilters({
         ))}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 rounded-lg border bg-card p-1.5">
+      <div className="flex items-center gap-1.5 rounded-lg border bg-card p-1.5">
         <span className="px-1 text-[10px] font-semibold uppercase text-muted-foreground">
           <Calendar className="mr-1 inline size-3" />
           Mes
@@ -89,7 +89,7 @@ export default function DashboardFilters({
         <button
           onClick={() => onChange({ ...value, month: null })}
           className={cn(
-            "rounded-md px-2.5 py-1 text-xs transition",
+            "whitespace-nowrap rounded-md px-2.5 py-1 text-xs transition",
             value.month === null
               ? "bg-primary text-primary-foreground"
               : "text-muted-foreground hover:bg-muted"
@@ -102,7 +102,7 @@ export default function DashboardFilters({
             key={m}
             onClick={() => toggle("month", m, value.month)}
             className={cn(
-              "rounded-md px-2.5 py-1 text-xs transition",
+              "whitespace-nowrap rounded-md px-2.5 py-1 text-xs transition",
               value.month === m
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-muted"
@@ -116,7 +116,7 @@ export default function DashboardFilters({
       {active && (
         <button
           onClick={clear}
-          className="inline-flex items-center gap-1.5 rounded-md border p-1.5 text-xs text-muted-foreground hover:bg-muted"
+          className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border p-1.5 text-xs text-muted-foreground hover:bg-muted"
         >
           <RotateCcw className="size-3.5" />
           Limpiar

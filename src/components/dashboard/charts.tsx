@@ -68,7 +68,7 @@ export function MainTrendChart({
   };
 
   return (
-    <div className="h-72 w-full">
+    <div className="h-full w-full">
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart data={series.data}>
           <defs>
@@ -111,7 +111,7 @@ export function CategoryPieChart({
   activeKey?: string | null;
 }) {
   return (
-    <div className="h-52 w-full">
+    <div className="h-full w-full">
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie
@@ -152,7 +152,7 @@ export function TopProductsBarChart({
   activeKey?: string | null;
 }) {
   return (
-    <div className="h-52 w-full">
+    <div className="h-full w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={series.data} layout="vertical" margin={{ left: 8 }}>
           <CartesianGrid
@@ -220,8 +220,9 @@ export function DynamicMainChart({
 
   return (
     <div className={cn("h-full w-full", className)}>
-      <div className="h-80 w-full">
-        <ResponsiveContainer width="100%" height="100%">          {type === "pie" ? (
+      <div className="h-full w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          {type === "pie" ? (
             <PieChart>
               <Pie
                 data={rows}

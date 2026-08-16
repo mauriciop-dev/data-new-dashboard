@@ -1,5 +1,26 @@
-import type { DashboardHighlight } from "@/lib/dashboard-store";
+import type { DashboardHighlight, BackgroundTheme } from "@/lib/dashboard-store";
 import type { ToolResult } from "@/lib/use-live-voice";
+
+/**
+ * Infiere el tema de fondo (animación Three.js) según el contexto de la
+ * consulta: ventas, productos, categorías, órdenes o estado por defecto.
+ */
+export function inferBackgroundTheme(result: ToolResult): BackgroundTheme {
+  const sql = (result.sql ?? "").toLowerCase();
+
+  if (/group by title|top productos/.test(sql)) return "productos";
+  if (/categoria/i.test(sql) || /left join categorias/i.test(sql)) return "categorias";
+  if (
+    /count\s*\(\s*distinct\s+cart_id|total_orders/.test(sql) &&
+    !/substr\(date|group by month/.test(sql)
+  ) {
+    return "ordenes";
+  }
+  if (/ventas totales|sum\(cart_total\)|rev\s*:\s*summary/.test(sql)) return "ventas";
+  if (/by mes|group by month|substr\(date/.test(sql)) return "ventas";
+
+  return "default";
+}
 
 /**
  * Infiere qué elemento del dashboard se está referenciando a partir de

@@ -1,27 +1,20 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
-import {
-  BarChart3,
-  PieChart,
-  Table2,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { ChevronLeft, ChevronRight, LayoutGrid } from "lucide-react";
 import { useDashboard } from "@/lib/dashboard-store";
 import { useDashboardData } from "@/lib/use-dashboard-data";
 import KpiCards from "./kpi-cards";
 import DashboardFilters, { type DashboardFilters as Filters } from "./filters";
-import {
-  MainTrendChart,
-  CategoryPieChart,
-  TopProductsBarChart,
-  DynamicMainChart,
-} from "./charts";
-import { TopProductsTable, RecentOrdersTable } from "./data-tables";
+import DashboardPages from "./dashboard-pages";
 import CubeTransition from "@/components/cube-transition";
 import { cn } from "@/lib/utils";
-import ExpansionPanel from "@/components/ui/expansion-panel";
+
+const PAGES = [
+  { id: 0, label: "Resumen" },
+  { id: 1, label: "Productos" },
+  { id: 2, label: "Órdenes" },
+];
 
 export default function DashboardView() {
   const [filters, setFilters] = useState<Filters>({
@@ -31,80 +24,70 @@ export default function DashboardView() {
 
   useDashboardData(filters);
 
-  const {
-    dashboard,
-    dashboardError,
-    chartError,
-    loading,
-    currentChart,
-    currentChartNote,
-    highlight,
-    setCurrentChart,
-  } = useDashboard();
+  const { dashboard, dashboardError, loading, currentChart } = useDashboard();
 
+  const [page, setPage] = useState(0); // página visible
+  const [nextPage, setNextPage] = useState<number | null>(null); // página destino
   const [cubePhase, setCubePhase] = useState<"idle" | "out" | "in">("idle");
-  const [showChart, setShowChart] = useState(false);
 
-  // Trigger cube transition when currentChart changes
-  useEffect(() => {
-    if (currentChart) {
+  const switchPage = useCallback(
+    (next: number) => {
+      if (cubePhase !== "idle" || next === page) return;
+      setNextPage(next);
       setCubePhase("out");
-      setShowChart(false);
+    },
+    [cubePhase, page]
+  );
+
+  const handleCubeOut = useCallback(() => {
+    if (nextPage === null) {
+      setCubePhase("idle");
+      return;
     }
-  }, [currentChart]);
+    setPage(nextPage);
+    setNextPage(null);
+    setCubePhase("in");
+  }, [nextPage]);
 
-  const mainSeries = useMemo(() => {
-    if (!dashboard) return { name: "", data: [] as Record<string, string | number>[] };
-    return { name: dashboard.mainSeries.name, data: dashboard.mainSeries.data };
-  }, [dashboard]);
+  const handleCubeIn = useCallback(() => {
+    setCubePhase("idle");
+  }, []);
 
-  const categorySeries = useMemo(() => {
-    if (!dashboard) return { name: "", data: [] as Record<string, string | number>[] };
-    return { name: dashboard.categorySeries.name, data: dashboard.categorySeries.data };
-  }, [dashboard]);
-
-  const topSeries = useMemo(() => {
-    if (!dashboard) return [] as Record<string, string | number>[];
-    return dashboard.topProducts.map((p) => ({
-      title: p.title.length > 22 ? p.title.slice(0, 21) + "…" : p.title,
-      Ventas: p.total,
-    }));
-  }, [dashboard]);
+  // Si el usuario genera una gráfica nueva, voltéalo hacia la página Resumen
+  useEffect(() => {
+    if (currentChart && cubePhase === "idle") {
+      const t = setTimeout(() => switchPage(0), 0);
+      return () => clearTimeout(t);
+    }
+  }, [currentChart, cubePhase, switchPage]);
 
   if (loading) {
     return (
-      <div className="space-y-4">
+      <div className="flex h-full min-h-0 flex-col gap-3">
         <KpiCards metrics={[]} isLoading />
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="h-80 animate-pulse rounded-xl border bg-card lg:col-span-2" />
-          <div className="h-80 animate-pulse rounded-xl border bg-card" />
-        </div>
+        <div className="flex-1 min-h-0 animate-pulse rounded-xl border bg-card" />
       </div>
     );
   }
 
   if (dashboardError || !dashboard) {
     return (
-      <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-6">
+      <div className="flex h-full min-h-0 items-start rounded-xl border border-destructive/40 bg-destructive/10 p-6">
         <p className="font-semibold text-destructive">
           Error al cargar el dashboard
         </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {dashboardError}
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{dashboardError}</p>
       </div>
     );
   }
 
-  const showGeneratedChart = !!currentChart;
-
   return (
-    <div className="space-y-5">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {/* KPIs */}
       <KpiCards metrics={dashboard.metrics} />
 
-      {/* Filtros (sticky) */}
-      <div className="rounded-xl border bg-card/70 backdrop-blur-xl p-4 shadow-sm">
+      {/* Filtros compactos */}
+      <div className="rounded-xl border bg-card/70 backdrop-blur-xl p-3 shadow-sm">
         <DashboardFilters
           categories={dashboard.filters.categories}
           months={dashboard.filters.months}
@@ -113,147 +96,62 @@ export default function DashboardView() {
         />
       </div>
 
-      {/* Main chart — generated or default with cube transition */}
-      <section
-        data-chart="main"
-        className={cn(
-          "relative rounded-xl border bg-card/70 backdrop-blur-xl p-5 shadow-sm transition-all duration-700",
-          highlight?.key === "main" && highlight.type === "chart" &&
-            "border-emerald-400/70 ring-2 ring-emerald-400/40"
-        )}
-      >
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <BarChart3 className="size-4 text-muted-foreground" />
-            <h2 className="text-sm font-semibold">
-              {showGeneratedChart ? "Gráfico principal" : "Ventas por mes"}
-            </h2>
-          </div>
-          {showGeneratedChart && (
+      {/* Navegación por páginas (como páginas de informe en Power BI) */}
+      <div className="flex items-center justify-center gap-2">
+        <button
+          onClick={() =>
+            switchPage((page + PAGES.length - 1) % PAGES.length)
+          }
+          disabled={cubePhase !== "idle"}
+          aria-label="Página anterior"
+          className="rounded-full border bg-card/70 backdrop-blur-xl p-2 text-muted-foreground transition hover:bg-card disabled:opacity-40"
+        >
+          <ChevronLeft className="size-4" />
+        </button>
+
+        <div className="flex items-center gap-1 rounded-full border bg-card/70 px-2 py-1 backdrop-blur-xl">
+          <LayoutGrid className="mr-1 size-4 text-muted-foreground" />
+          {PAGES.map((p) => (
             <button
-              onClick={() => {
-                setShowChart(false);
-                setCubePhase("idle");
-                setCurrentChart(null);
-              }}
-              className="inline-flex items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs text-muted-foreground hover:bg-muted/70"
-              aria-label="Restaurar gráfico por defecto"
+              key={p.id}
+              onClick={() => switchPage(p.id)}
+              disabled={cubePhase !== "idle"}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-medium transition",
+                page === p.id
+                  ? "bg-primary text-primary-foreground shadow"
+                  : "text-muted-foreground hover:bg-muted"
+              )}
             >
-              <X className="size-3.5" />
-              Restaurar
+              {p.label}
             </button>
-          )}
+          ))}
         </div>
 
-        {currentChartNote && (
-          <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300">
-            <Sparkles className="mt-0.5 size-3.5 shrink-0" />
-            {currentChartNote}
-          </p>
-        )}
-        {chartError && (
-          <p className="mb-3 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
-            {chartError}
-          </p>
-        )}
-
-        <div className="relative h-80 w-full">
-          {cubePhase === "out" && (
-            <CubeTransition
-              direction="out"
-              onComplete={() => {
-                setCubePhase("in");
-                setShowChart(true);
-              }}
-            />
-          )}
-          {cubePhase === "in" && (
-            <CubeTransition
-              direction="in"
-              onComplete={() => {
-                setCubePhase("idle");
-              }}
-            />
-          )}
-
-          <div
-            className={cn(
-              "absolute inset-0 transition-all duration-500",
-              showChart && cubePhase === "idle"
-                ? "opacity-100"
-                : "pointer-events-none opacity-0"
-            )}
-          >
-            {showGeneratedChart ? (
-              <DynamicMainChart result={currentChart} />
-            ) : (
-              <MainTrendChart series={mainSeries} />
-            )}
-          </div>
-
-          {!showChart && cubePhase === "idle" && !showGeneratedChart && (
-            <div className="absolute inset-0">
-              <MainTrendChart series={mainSeries} />
-            </div>
-          )}
-        </div>
-      </section>
-
-      {/* Two smaller charts (always visible) */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section
-          data-chart="categorias"
-          className={cn(
-            "rounded-xl border bg-card/70 backdrop-blur-xl p-5 shadow-sm transition-all duration-700",
-            highlight?.key === "categorias" &&
-              "border-emerald-400/70 ring-2 ring-emerald-400/40"
-          )}
+        <button
+          onClick={() => switchPage((page + 1) % PAGES.length)}
+          disabled={cubePhase !== "idle"}
+          aria-label="Página siguiente"
+          className="rounded-full border bg-card/70 backdrop-blur-xl p-2 text-muted-foreground transition hover:bg-card disabled:opacity-40"
         >
-          <div className="mb-2 flex items-center gap-2">
-            <PieChart className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">Ventas por categoría</h3>
-          </div>
-          <CategoryPieChart
-            series={categorySeries}
-            activeKey={filters.category}
-          />
-        </section>
-
-        <section
-          data-chart="top-productos"
-          className={cn(
-            "rounded-xl border bg-card/70 backdrop-blur-xl p-5 shadow-sm transition-all duration-700",
-            highlight?.key === "top-productos" &&
-              "border-emerald-400/70 ring-2 ring-emerald-400/40"
-          )}
-        >
-          <div className="mb-2 flex items-center gap-2">
-            <BarChart3 className="size-4 text-muted-foreground" />
-            <h3 className="text-sm font-semibold">Top productos</h3>
-          </div>
-          <TopProductsBarChart
-            series={{ name: "Top productos", data: topSeries }}
-            activeKey={filters.category}
-          />
-        </section>
+          <ChevronRight className="size-4" />
+        </button>
       </div>
 
-      {/* Datos adicionales como panels expandibles */}
-      <ExpansionPanel
-        title="Productos destacados"
-        defaultOpen={false}
-        icon={<Table2 className="size-4 text-muted-foreground" />}
-      >
-        <TopProductsTable rows={dashboard.topProducts} />
-      </ExpansionPanel>
-
-      <ExpansionPanel
-        title="Órdenes recientes"
-        defaultOpen={false}
-        icon={<Table2 className="size-4 text-muted-foreground" />}
-      >
-        <RecentOrdersTable rows={dashboard.recentOrders} />
-      </ExpansionPanel>
+      {/* Área de contenido con transición de cubo 3D */}
+      <div className="relative min-h-0 flex-1">
+        {cubePhase !== "idle" && (
+          <CubeTransition
+            direction={cubePhase}
+            onComplete={
+              cubePhase === "out" ? handleCubeOut : handleCubeIn
+            }
+          />
+        )}
+        <div className="absolute inset-0">
+          <DashboardPages page={page} />
+        </div>
+      </div>
     </div>
   );
 }

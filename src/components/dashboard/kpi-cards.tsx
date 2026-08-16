@@ -31,11 +31,11 @@ export default function KpiCards({
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
-            className="h-28 animate-pulse rounded-xl border bg-card"
+            className="h-24 animate-pulse rounded-xl border bg-card"
           />
         ))}
       </div>
@@ -43,7 +43,7 @@ export default function KpiCards({
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {metrics.map((kpi) => {
         const Icon = iconMap[kpi.icon] ?? DollarSign;
         const active = highlight?.key === kpi.key;
@@ -53,7 +53,7 @@ export default function KpiCards({
             key={kpi.key}
             data-kpi={kpi.key}
             className={cn(
-              "group relative overflow-hidden rounded-xl border bg-card/70 backdrop-blur-xl p-5 shadow-sm transition-all duration-700",
+              "group relative overflow-hidden rounded-xl border bg-card/70 backdrop-blur-xl p-4 shadow-sm transition-all duration-700",
               active
                 ? "border-emerald-400/70 ring-2 ring-emerald-400/40 shadow-[0_0_24px_rgba(16,185,129,0.35)]"
                 : "hover:shadow-md"
@@ -77,7 +77,7 @@ export default function KpiCards({
             </div>
             <p
               className={cn(
-                "mt-2 text-3xl font-semibold tracking-tight transition-colors",
+                "mt-2 text-2xl font-semibold tracking-tight transition-colors",
                 active && "text-emerald-600"
               )}
             >

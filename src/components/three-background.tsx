@@ -1,18 +1,90 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { useDashboard } from "@/lib/dashboard-store";
+import { useDashboard, type BackgroundTheme } from "@/lib/dashboard-store";
+
+// Paleta, formas y velocidad por tema. El fondo cambia sutilmente según el
+// contexto de lo que se está hablando (ventas, productos, categorías, órdenes).
+const THEMES: Record<
+  BackgroundTheme,
+  {
+    label: string;
+    palette: string[];
+    speed: number;
+    shape: "coins" | "boxes" | "rings" | "orb" | "default";
+  }
+> = {
+  default: {
+    label: "Resumen",
+    palette: [
+      "hsl(221 83% 53%)",
+      "hsl(160 84% 39%)",
+      "hsl(262 83% 58%)",
+      "hsl(200 80% 60%)",
+      "hsl(155 62% 45%)",
+    ],
+    speed: 1,
+    shape: "default",
+  },
+  ventas: {
+    label: "Ventas",
+    palette: [
+      "hsl(160 84% 39%)",
+      "hsl(142 71% 45%)",
+      "hsl(155 62% 45%)",
+      "hsl(100 60% 50%)",
+      "hsl(150 80% 55%)",
+    ],
+    speed: 1.2,
+    shape: "coins",
+  },
+  productos: {
+    label: "Productos",
+    palette: [
+      "hsl(221 83% 53%)",
+      "hsl(262 83% 58%)",
+      "hsl(250 90% 66%)",
+      "hsl(217 91% 60%)",
+    ],
+    speed: 1.1,
+    shape: "boxes",
+  },
+  categorias: {
+    label: "Categorías",
+    palette: [
+      "hsl(30 100% 55%)",
+      "hsl(20 90% 56%)",
+      "hsl(340 82% 55%)",
+      "hsl(0 72% 55%)",
+    ],
+    speed: 1.15,
+    shape: "rings",
+  },
+  ordenes: {
+    label: "Órdenes",
+    palette: [
+      "hsl(199 89% 48%)",
+      "hsl(200 80% 60%)",
+      "hsl(187 92% 56%)",
+      "hsl(217 91% 60%)",
+    ],
+    speed: 1.3,
+    shape: "orb",
+  },
+};
 
 export default function ThreeBackground() {
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const { dashboard } = useDashboard();
-  const [hovered, setHovered] = useState<{ x: number; y: number } | null>(null);
+  const { theme } = useDashboard();
 
   useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
     if (typeof window === "undefined") return;
+
+    const cfg = THEMES[theme] ?? THEMES.default;
+    const palette = cfg.palette.map((c) => new THREE.Color(c));
 
     let renderer: THREE.WebGLRenderer;
     let scene: THREE.Scene;
@@ -43,13 +115,6 @@ export default function ThreeBackground() {
       const positions = new Float32Array(count * 3);
       const colors = new Float32Array(count * 3);
       const velocities = new Float32Array(count * 3);
-      const palette = [
-        new THREE.Color("hsl(221 83% 53%)"),
-        new THREE.Color("hsl(160 84% 39%)"),
-        new THREE.Color("hsl(262 83% 58%)"),
-        new THREE.Color("hsl(200 80% 60%)"),
-        new THREE.Color("hsl(155 62% 45%)"),
-      ];
 
       for (let i = 0; i < count; i++) {
         positions[i * 3] = (Math.random() - 0.5) * 14;
@@ -79,40 +144,93 @@ export default function ThreeBackground() {
       const points = new THREE.Points(geo, mat);
       scene.add(points);
 
+      // --- Decor figures depending on theme ---
+      const decoGroup = new THREE.Group();
+      scene.add(decoGroup);
+
+      const addShape = (
+        geometry: THREE.BufferGeometry,
+        color: THREE.Color,
+        opacity: number,
+        pos: THREE.Vector3
+      ) => {
+        const meshMaterial = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity,
+          wireframe: true,
+        });
+        const mesh = new THREE.Mesh(geometry, meshMaterial);
+        mesh.position.copy(pos);
+        mesh.rotation.set(
+          Math.random() * Math.PI,
+          Math.random() * Math.PI,
+          Math.random() * Math.PI
+        );
+        mesh.userData.spin = {
+          x: (Math.random() - 0.5) * 0.005,
+          y: (Math.random() - 0.5) * 0.005,
+        };
+        decoGroup.add(mesh);
+        return mesh;
+      };
+
+      const geoShared: Record<string, THREE.BufferGeometry> = {
+        coin: new THREE.CylinderGeometry(0.18, 0.18, 0.04, 12),
+        box: new THREE.BoxGeometry(0.16, 0.16, 0.16),
+        ring: new THREE.TorusGeometry(0.2, 0.045, 8, 20),
+        orb: new THREE.SphereGeometry(0.14, 10, 10),
+        wire: new THREE.IcosahedronGeometry(1.8, 1),
+      };
+
+      const decoCount = 7;
+      for (let i = 0; i < decoCount; i++) {
+        let shapeKey: keyof typeof geoShared = "wire";
+        if (cfg.shape === "coins") shapeKey = "coin";
+        else if (cfg.shape === "boxes") shapeKey = "box";
+        else if (cfg.shape === "rings") shapeKey = "ring";
+        else if (cfg.shape === "orb") shapeKey = "orb";
+
+        // Debajo de las esquinas, fuera del contenido central
+        const corner = i % 4;
+        const spread = 5.5;
+        const pos = new THREE.Vector3(
+          (corner === 0 || corner === 2 ? -1 : 1) * spread +
+            (Math.random() - 0.5) * 1.5,
+          (corner < 2 ? -1 : 1) * (2.2 + Math.random() * 1.5),
+          (Math.random() - 0.5) * 4
+        );
+        const color = palette[i % palette.length];
+        const opacity = 0.1 + Math.random() * 0.08;
+        addShape(geoShared[shapeKey], color, opacity, pos);
+        // También un wireframe central ligero
+        if (i === 0) {
+          addShape(geoShared.wire, palette[0], 0.05, new THREE.Vector3(0, 0, -0.5));
+        }
+      }
+
       // --- Floating KPI cubes (from dashboard metrics) ---
       const kpiGroup = new THREE.Group();
       scene.add(kpiGroup);
 
-      const metricColors = [
-        new THREE.Color("hsl(221 83% 53%)"),
-        new THREE.Color("hsl(160 84% 39%)"),
-        new THREE.Color("hsl(262 83% 58%)"),
-        new THREE.Color("hsl(200 80% 60%)"),
-      ];
-
       const kpiGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-      const kpiMat = new THREE.MeshBasicMaterial({
-        color: metricColors[0],
-        transparent: true,
-        opacity: 0.35,
-        wireframe: false,
-      });
-
-      // Create floating cubes based on current metrics
       const cubeMeshes: THREE.InstancedMesh[] = [];
-      const metricCount = dashboard?.metrics?.length ?? 4;
-      const cubes = Math.min(metricCount, 4);
 
-      for (let i = 0; i < cubes; i++) {
-        const cube = new THREE.InstancedMesh(kpiGeo, kpiMat, 1);
-        cube.instanceColor = new THREE.InstancedBufferAttribute(
-          new Float32Array(3),
-          3
+      for (let i = 0; i < 4; i++) {
+        const cube = new THREE.InstancedMesh(
+          kpiGeo,
+          new THREE.MeshBasicMaterial({
+            color: palette[i % palette.length],
+            transparent: true,
+            opacity: 0.35,
+          }),
+          1
         );
-        const color = metricColors[i % metricColors.length];
-        cube.setColorAt(0, color);
-
-        const angle = (i / cubes) * Math.PI * 2;
+        cube.setColorAt(
+          0,
+          palette[i % palette.length]
+        );
+        const angle = (i / 4) * Math.PI * 2;
         cube.position.set(
           Math.cos(angle) * 3.5,
           Math.sin(angle) * 1.2,
@@ -122,60 +240,48 @@ export default function ThreeBackground() {
         cubeMeshes.push(cube);
       }
 
-      // --- Icosahedron wireframe ---
-      const wireGeo = new THREE.IcosahedronGeometry(1.6, 1);
-      const wireMat = new THREE.MeshBasicMaterial({
-        color: "hsl(221 83% 53%)",
-        wireframe: true,
-        transparent: true,
-        opacity: 0.06,
-      });
-      const wire = new THREE.Mesh(wireGeo, wireMat);
-      scene.add(wire);
-
-      // Store original positions for hover repulsion
       const originalPositions = positions.slice();
 
       const animate = () => {
         if (disposed) return;
 
-        // Rotate particles
-        points.rotation.y += 0.0005;
-        points.rotation.x += 0.0003;
+        const sp = cfg.speed;
 
-        // Rotate icosahedron
-        wire.rotation.x += 0.002;
-        wire.rotation.y += 0.0015;
+        points.rotation.y += 0.0005 * sp;
+        points.rotation.x += 0.0003 * sp;
 
-        // Animate floating KPI cubes
-        cubeMeshes.forEach((cube, i) => {
-          cube.rotation.x += 0.003 + i * 0.001;
-          cube.rotation.y += 0.002;
-          cube.position.y += Math.sin(Date.now() * 0.001 + i) * 0.0005;
+        decoGroup.children.forEach((obj) => {
+          obj.rotation.x += (obj.userData.spin?.x ?? 0.003) * sp;
+          obj.rotation.y += (obj.userData.spin?.y ?? 0.002) * sp;
+          obj.position.y += Math.sin(Date.now() * 0.0008 + obj.id) * 0.0004 * sp;
         });
 
-        // Mouse-responsive particle drift
-        points.rotation.y += mouseX * 0.00002;
-        points.rotation.x += mouseY * 0.00001;
+        cubeMeshes.forEach((cube, i) => {
+          cube.rotation.x += (0.003 + i * 0.001) * sp;
+          cube.rotation.y += 0.002 * sp;
+          cube.position.y +=
+            Math.sin(Date.now() * 0.001 + i) * 0.0005 * sp;
+        });
 
-        // Particle physics update
-        const positions = geo.attributes.position.array as Float32Array;
+        points.rotation.y += mouseX * 0.00002 * sp;
+        points.rotation.x += mouseY * 0.00001 * sp;
+
+        const posArr = geo.attributes.position.array as Float32Array;
         for (let i = 0; i < count; i++) {
-          positions[i * 3] += velocities[i * 3] * 0.5;
-          positions[i * 3 + 1] += velocities[i * 3 + 1] * 0.5;
-          positions[i * 3 + 2] += velocities[i * 3 + 2] * 0.5;
+          posArr[i * 3] += velocities[i * 3] * 0.5 * sp;
+          posArr[i * 3 + 1] += velocities[i * 3 + 1] * 0.5 * sp;
+          posArr[i * 3 + 2] += velocities[i * 3 + 2] * 0.5 * sp;
 
-          // Return to original with easing
-          positions[i * 3] += (originalPositions[i * 3] - positions[i * 3]) * 0.02;
-          positions[i * 3 + 1] +=
-            (originalPositions[i * 3 + 1] - positions[i * 3 + 1]) * 0.02;
-          positions[i * 3 + 2] +=
-            (originalPositions[i * 3 + 2] - positions[i * 3 + 2]) * 0.02;
+          posArr[i * 3] +=
+            (originalPositions[i * 3] - posArr[i * 3]) * 0.02;
+          posArr[i * 3 + 1] +=
+            (originalPositions[i * 3 + 1] - posArr[i * 3 + 1]) * 0.02;
+          posArr[i * 3 + 2] +=
+            (originalPositions[i * 3 + 2] - posArr[i * 3 + 2]) * 0.02;
 
-          // Keep particles within bounds
-          if (Math.abs(positions[i * 3]) > 7) velocities[i * 3] *= -1;
-          if (Math.abs(positions[i * 3 + 1]) > 5) velocities[i * 3 + 1] *= -1;
-          if (Math.abs(positions[i * 3 + 2]) > 4) velocities[i * 3 + 2] *= -1;
+          if (Math.abs(posArr[i * 3]) > 7) velocities[i * 3] *= -1;
+          if (Math.abs(posArr[i * 3 + 1]) > 5) velocities[i * 3 + 1] *= -1;
+          if (Math.abs(posArr[i * 3 + 2]) > 4) velocities[i * 3 + 2] *= -1;
         }
         geo.attributes.position.needsUpdate = true;
 
@@ -184,12 +290,10 @@ export default function ThreeBackground() {
       };
       animate();
 
-      // --- Mouse tracking for interactivity ---
       const onMouseMove = (e: MouseEvent) => {
         const rect = mount.getBoundingClientRect();
         mouseX = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
         mouseY = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
-        setHovered({ x: mouseX, y: mouseY });
       };
       mount.addEventListener("mousemove", onMouseMove);
 
@@ -208,10 +312,16 @@ export default function ThreeBackground() {
         mount.removeEventListener("mousemove", onMouseMove);
         geo.dispose();
         mat.dispose();
-        wireGeo.dispose();
-        wireMat.dispose();
+        Object.values(geoShared).forEach((g) => g.dispose());
+        decoGroup.children.forEach((obj) => {
+          const mesh = obj as THREE.Mesh;
+          if (mesh.material) {
+            (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach((m) =>
+              (m as THREE.Material).dispose()
+            );
+          }
+        });
         kpiGeo.dispose();
-        kpiMat.dispose();
         cubeMeshes.forEach((c) => c.dispose());
         renderer.dispose();
         if (renderer.domElement.parentNode === mount) {
@@ -221,7 +331,7 @@ export default function ThreeBackground() {
     } catch {
       return;
     }
-  }, [dashboard]);
+  }, [theme]);
 
   return (
     <div
@@ -231,4 +341,3 @@ export default function ThreeBackground() {
     />
   );
 }
-

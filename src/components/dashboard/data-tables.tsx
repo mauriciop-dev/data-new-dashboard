@@ -14,9 +14,11 @@ const formatMoney = (value: number) =>
 export function TopProductsTable({
   rows,
   isLoading,
+  className,
 }: {
   rows: TopProductRow[];
   isLoading?: boolean;
+  className?: string;
 }) {
   const { highlight } = useDashboard();
   if (isLoading) {
@@ -25,8 +27,11 @@ export function TopProductsTable({
     );
   }
   return (
-    <div className="overflow-hidden rounded-lg border bg-card" data-table="productos">
-      <div className="overflow-x-auto">
+    <div
+      className={cn("overflow-hidden rounded-lg border bg-card", className)}
+      data-table="productos"
+    >
+      <div className="h-full overflow-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -85,17 +90,22 @@ export function TopProductsTable({
 export function RecentOrdersTable({
   rows,
   isLoading,
+  className,
 }: {
   rows: RecentOrderRow[];
   isLoading?: boolean;
+  className?: string;
 }) {
   const { highlight } = useDashboard();
   if (isLoading) {
     return <div className="h-60 animate-pulse rounded-lg border bg-card" />;
   }
   return (
-    <div className="overflow-hidden rounded-lg border bg-card" data-table="pedidos">
-      <div className="overflow-x-auto">
+    <div
+      className={cn("overflow-hidden rounded-lg border bg-card", className)}
+      data-table="pedidos"
+    >
+      <div className="h-full overflow-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">

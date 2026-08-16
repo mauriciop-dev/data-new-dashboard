@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
 interface CubeTransitionProps {
@@ -13,7 +13,7 @@ export default function CubeTransition({
   direction = "out",
 }: CubeTransitionProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const [progress, setProgress] = useState(0);
+  const doneRef = useRef(false);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -25,6 +25,7 @@ export default function CubeTransition({
     let camera: THREE.PerspectiveCamera;
     let frame: number;
     let disposed = false;
+    doneRef.current = false;
 
     try {
       renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -44,53 +45,28 @@ export default function CubeTransition({
       );
       camera.position.z = 4;
 
-      // Cube geometry — will hold textures on faces
-      const geometry = new THREE.BoxGeometry(1.2, 1.6, 0.2);
+      const geometry = new THREE.BoxGeometry(2.2, 1.6, 0.2);
 
-      // Face materials with different colors representing different chart states
       const faceColors = [
-        new THREE.MeshBasicMaterial({
-          color: "hsl(221 83% 53%)",
-          transparent: true,
-          opacity: 0.8,
-          side: THREE.DoubleSide,
-        }),
-        new THREE.MeshBasicMaterial({
-          color: "hsl(160 84% 39%)",
-          transparent: true,
-          opacity: 0.8,
-          side: THREE.DoubleSide,
-        }),
-        new THREE.MeshBasicMaterial({
-          color: "hsl(262 83% 58%)",
-          transparent: true,
-          opacity: 0.8,
-          side: THREE.DoubleSide,
-        }),
-        new THREE.MeshBasicMaterial({
-          color: "hsl(200 80% 60%)",
-          transparent: true,
-          opacity: 0.8,
-          side: THREE.DoubleSide,
-        }),
-        new THREE.MeshBasicMaterial({
-          color: "hsl(155 62% 45%)",
-          transparent: true,
-          opacity: 0.8,
-          side: THREE.DoubleSide,
-        }),
-        new THREE.MeshBasicMaterial({
-          color: "hsl(20 90% 55%)",
-          transparent: true,
-          opacity: 0.8,
-          side: THREE.DoubleSide,
-        }),
-      ];
+        "hsl(221 83% 53%)",
+        "hsl(160 84% 39%)",
+        "hsl(262 83% 58%)",
+        "hsl(200 80% 60%)",
+        "hsl(155 62% 45%)",
+        "hsl(20 90% 55%)",
+      ].map(
+        (color) =>
+          new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.8,
+            side: THREE.DoubleSide,
+          })
+      );
 
       const cube = new THREE.Mesh(geometry, faceColors);
       scene.add(cube);
 
-      // Edges for glow effect
       const edges = new THREE.EdgesGeometry(geometry);
       const edgeMat = new THREE.LineBasicMaterial({
         color: "hsl(0 0% 100%)",
@@ -107,14 +83,13 @@ export default function CubeTransition({
 
         const elapsed = (Date.now() - startTime) / 1000;
 
-        // Full rotation animation
         if (direction === "out") {
           cube.rotation.y = elapsed * Math.PI;
           cube.rotation.x = elapsed * (Math.PI / 2);
           cube.scale.set(
-            1 + elapsed * 0.5,
-            1 + elapsed * 0.5,
-            1 + elapsed * 0.5
+            1 + elapsed * 0.6,
+            1 + elapsed * 0.6,
+            1 + elapsed * 0.6
           );
           cube.material.forEach((m) => {
             (m as THREE.MeshBasicMaterial).opacity = Math.max(
@@ -140,13 +115,11 @@ export default function CubeTransition({
           edgeMat.opacity = Math.min(0.6, elapsed * 0.6);
         }
 
-        setProgress((elapsed % 1));
-
         renderer.render(scene, camera);
         frame = requestAnimationFrame(animate);
 
-        // Complete after ~1.5 seconds of animation
-        if (elapsed > 1.5) {
+        if (elapsed > 1.5 && !doneRef.current) {
+          doneRef.current = true;
           onComplete();
         }
       };

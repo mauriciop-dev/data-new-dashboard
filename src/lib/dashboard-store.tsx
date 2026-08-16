@@ -10,12 +10,20 @@ import {
   type ReactNode,
 } from "react";
 import type { ToolResult } from "@/lib/use-live-voice";
+import { inferBackgroundTheme } from "@/lib/highlight";
 
 export type DashboardHighlight = {
   key: string;
   label: string;
   type: "kpi" | "chart" | "table";
 } | null;
+
+export type BackgroundTheme =
+  | "default"
+  | "ventas"
+  | "productos"
+  | "categorias"
+  | "ordenes";
 
 interface DashboardStore {
   dashboard: DashboardData | null;
@@ -25,6 +33,8 @@ interface DashboardStore {
   currentChart: ToolResult | null;
   currentChartNote: string | null;
   highlight: DashboardHighlight;
+  theme: BackgroundTheme;
+  setTheme: (t: BackgroundTheme) => void;
   setCurrentChart: (
     result: ToolResult | null,
     note?: string | null
@@ -88,6 +98,7 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
   const [currentChart, setCurrentChart] = useState<ToolResult | null>(null);
   const [currentChartNote, setCurrentChartNote] = useState<string | null>(null);
   const [highlight, setHighlight] = useState<DashboardHighlight>(null);
+  const [theme, setTheme] = useState<BackgroundTheme>("default");
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -95,6 +106,9 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     (result: ToolResult | null, note?: string | null) => {
       setCurrentChart(result);
       setCurrentChartNote(note ?? null);
+      if (result) {
+        setTheme(inferBackgroundTheme(result));
+      }
       if (timerRef.current) clearTimeout(timerRef.current);
       if (highlight) setHighlight(null);
     },
@@ -125,6 +139,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         currentChart,
         currentChartNote,
         highlight,
+        theme,
+        setTheme,
         setCurrentChart: publishChart,
         setHighlight: publishHighlight,
         setDashboard,
