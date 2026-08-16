@@ -47,10 +47,10 @@ function ChatPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 function Dashboard({ setChatOpen }: { setChatOpen: (v: boolean) => void }) {
   return (
-    <div className="relative flex h-screen w-full flex-col bg-background font-sans overflow-hidden">
+    <div className="isolate relative flex h-screen w-full flex-col bg-background font-sans overflow-hidden">
       <ThreeBackground />
 
-      <header className="flex-shrink-0 border-b bg-card/70 backdrop-blur-xl">
+      <header className="z-10 flex-shrink-0 border-b bg-card/70 backdrop-blur-xl">
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-lg">
@@ -84,7 +84,7 @@ function Dashboard({ setChatOpen }: { setChatOpen: (v: boolean) => void }) {
       </header>
 
       {/* Contenido que llena la pantalla (sin scroll, tipo Power BI) */}
-      <div className="min-h-0 flex-1">
+      <div className="z-10 min-h-0 flex-1">
         <div className="mx-auto h-full w-full max-w-7xl px-4 py-4 sm:px-6">
           <DashboardView />
         </div>

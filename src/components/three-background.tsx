@@ -83,7 +83,7 @@ export default function ThreeBackground() {
     if (!mount) return;
     if (typeof window === "undefined") return;
 
-    const cfg = THEMES[theme] ?? THEMES.default;
+const cfg = THEMES[theme] ?? THEMES.default;
     const palette = cfg.palette.map((c) => new THREE.Color(c));
 
     let renderer: THREE.WebGLRenderer;
@@ -110,8 +110,20 @@ export default function ThreeBackground() {
       );
       camera.position.z = 6;
 
+      // --- Ambient glow: tinte del tema sobre todo el fondo ---
+      const glowGeo = new THREE.IcosahedronGeometry(9, 2);
+      const glowMat = new THREE.MeshBasicMaterial({
+        color: palette[0],
+        transparent: true,
+        opacity: 0.45,
+        side: THREE.BackSide,
+        depthWrite: false,
+      });
+      const glow = new THREE.Mesh(glowGeo, glowMat);
+      scene.add(glow);
+
       // --- Particles ---
-      const count = 420;
+      const count = 700;
       const positions = new Float32Array(count * 3);
       const colors = new Float32Array(count * 3);
       const velocities = new Float32Array(count * 3);
@@ -134,10 +146,10 @@ export default function ThreeBackground() {
       geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
       const mat = new THREE.PointsMaterial({
-        size: 0.03,
+        size: 0.14,
         vertexColors: true,
         transparent: true,
-        opacity: 0.45,
+        opacity: 1,
         depthWrite: false,
         sizeAttenuation: true,
       });
@@ -160,7 +172,12 @@ export default function ThreeBackground() {
           opacity,
           wireframe: true,
         });
-        const mesh = new THREE.Mesh(geometry, meshMaterial);
+        const solidMaterial = new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: opacity * 0.25,
+        });
+        const mesh = new THREE.Mesh(geometry, [solidMaterial, meshMaterial]);
         mesh.position.copy(pos);
         mesh.rotation.set(
           Math.random() * Math.PI,
@@ -201,11 +218,11 @@ export default function ThreeBackground() {
           (Math.random() - 0.5) * 4
         );
         const color = palette[i % palette.length];
-        const opacity = 0.1 + Math.random() * 0.08;
+        const opacity = 0.5 + Math.random() * 0.3;
         addShape(geoShared[shapeKey], color, opacity, pos);
         // También un wireframe central ligero
         if (i === 0) {
-          addShape(geoShared.wire, palette[0], 0.05, new THREE.Vector3(0, 0, -0.5));
+          addShape(geoShared.wire, palette[0], 0.3, new THREE.Vector3(0, 0, -0.5));
         }
       }
 
@@ -213,7 +230,7 @@ export default function ThreeBackground() {
       const kpiGroup = new THREE.Group();
       scene.add(kpiGroup);
 
-      const kpiGeo = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+      const kpiGeo = new THREE.BoxGeometry(0.28, 0.28, 0.28);
       const cubeMeshes: THREE.InstancedMesh[] = [];
 
       for (let i = 0; i < 4; i++) {
@@ -222,7 +239,7 @@ export default function ThreeBackground() {
           new THREE.MeshBasicMaterial({
             color: palette[i % palette.length],
             transparent: true,
-            opacity: 0.35,
+            opacity: 0.85,
           }),
           1
         );
@@ -323,6 +340,8 @@ export default function ThreeBackground() {
         });
         kpiGeo.dispose();
         cubeMeshes.forEach((c) => c.dispose());
+        glowGeo.dispose();
+        glowMat.dispose();
         renderer.dispose();
         if (renderer.domElement.parentNode === mount) {
           mount.removeChild(renderer.domElement);
@@ -337,7 +356,7 @@ export default function ThreeBackground() {
     <div
       ref={mountRef}
       aria-hidden
-      className="pointer-events-none fixed inset-0 -z-10 hidden opacity-70 lg:block"
+      className="pointer-events-none fixed inset-0 z-0 opacity-90"
     />
   );
 }
