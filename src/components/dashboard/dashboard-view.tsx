@@ -7,6 +7,8 @@ import {
   Table2,
   Sparkles,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useDashboard } from "@/lib/dashboard-store";
 import { useDashboardData } from "@/lib/use-dashboard-data";
@@ -18,8 +20,9 @@ import {
   TopProductsBarChart,
   DynamicMainChart,
 } from "./charts";
-import { TopProductsTable } from "./data-tables";
+import { TopProductsTable, RecentOrdersTable } from "./data-tables";
 import { cn } from "@/lib/utils";
+import ExpansionPanel from "@/components/ui/expansion-panel";
 
 export default function DashboardView() {
   const [filters, setFilters] = useState<Filters>({
@@ -90,6 +93,16 @@ export default function DashboardView() {
       {/* KPIs */}
       <KpiCards metrics={dashboard.metrics} />
 
+      {/* Filtros (sticky) */}
+      <div className="rounded-xl border bg-card p-4 shadow-sm">
+        <DashboardFilters
+          categories={dashboard.filters.categories}
+          months={dashboard.filters.months}
+          value={filters}
+          onChange={setFilters}
+        />
+      </div>
+
       {/* Main chart — generated or default */}
       <section
         data-chart="main"
@@ -137,7 +150,7 @@ export default function DashboardView() {
         )}
       </section>
 
-      {/* Two smaller charts */}
+      {/* Two smaller charts (always visible) */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <section
           data-chart="categorias"
@@ -176,27 +189,22 @@ export default function DashboardView() {
         </section>
       </div>
 
-      {/* Filtros */}
-      <DashboardFilters
-        categories={dashboard.filters.categories}
-        months={dashboard.filters.months}
-        value={filters}
-        onChange={setFilters}
-      />
-
-      {/* Tabla */}
-      <section className="space-y-3">
-        <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-          <Table2 className="size-4" />
-          Productos destacados
-          {filters.category && (
-            <span className="text-xs text-muted-foreground">
-              (filtrado: {filters.category})
-            </span>
-          )}
-        </div>
+      {/* Datos adicionales como panels expandibles */}
+      <ExpansionPanel
+        title="Productos destacados"
+        defaultOpen={true}
+        icon={<Table2 className="size-4 text-muted-foreground" />}
+      >
         <TopProductsTable rows={dashboard.topProducts} />
-      </section>
+      </ExpansionPanel>
+
+      <ExpansionPanel
+        title="Órdenes recientes"
+        defaultOpen={false}
+        icon={<Table2 className="size-4 text-muted-foreground" />}
+      >
+        <RecentOrdersTable rows={dashboard.recentOrders} />
+      </ExpansionPanel>
     </div>
   );
 }
