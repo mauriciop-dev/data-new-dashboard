@@ -128,3 +128,63 @@
     @apply font-sans;
   }
 }
+
+/* Glassmorphism utility class */
+.glass-card {
+  @apply bg-card/70 backdrop-blur-xl border;
+  box-shadow:
+    0 8px 32px 0 rgb(0 0 0 / 0.08),
+    inset 0 1px 0 0 rgb(255 255 255 / 0.12);
+}
+
+/* Micro-animations */
+@keyframes pulse-scale {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes float-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+/* Card hover lift */
+.card-hover:hover {
+  @apply shadow-xl;
+  transform: translateY(-2px);
+}
+
+/* Count-up animation for KPI numbers */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Gradient accent border animation */
+.gradient-border {
+  position: relative;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      hsl(221 83% 53% / 0.4),
+      hsl(160 84% 39% / 0.4),
+      hsl(262 83% 58% / 0.4)
+    );
+    mask:
+      linear-gradient(not transparent, transparent 50%) content-box,
+      linear-gradient(not transparent, transparent 50%);
+    -webkit-mask-composite: destination-out;
+    mask-composite: destination-out;
+    pointer-events: none;
+  }
+}
