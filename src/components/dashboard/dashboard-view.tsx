@@ -51,16 +51,24 @@ export default function DashboardView() {
 
   const categorySeries = useMemo(() => {
     if (!dashboard) return { name: "", data: [] as Record<string, string | number>[] };
-    return { name: dashboard.categorySeries.name, data: dashboard.categorySeries.data };
-  }, [dashboard]);
+    let data = dashboard.categorySeries.data;
+    if (filters.category) {
+      data = data.filter((d) => d.categoria === filters.category);
+    }
+    return { name: dashboard.categorySeries.name, data };
+  }, [dashboard, filters.category]);
 
   const topSeries = useMemo(() => {
     if (!dashboard) return [] as Record<string, string | number>[];
-    return dashboard.topProducts.map((p) => ({
+    let products = dashboard.topProducts;
+    if (filters.category) {
+      products = products.filter((p) => p.categoria === filters.category);
+    }
+    return products.map((p) => ({
       title: p.title.length > 22 ? p.title.slice(0, 21) + "…" : p.title,
       Ventas: p.total,
     }));
-  }, [dashboard]);
+  }, [dashboard, filters.category]);
 
   if (loading) {
     return (
@@ -193,8 +201,17 @@ export default function DashboardView() {
         <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
           <Table2 className="size-4" />
           Productos destacados
+          {filters.category && (
+            <span className="text-xs text-muted-foreground">
+              (filtrado: {filters.category})
+            </span>
+          )}
         </div>
-        <TopProductsTable rows={dashboard.topProducts} />
+        <TopProductsTable
+          rows={filters.category
+            ? dashboard.topProducts.filter((p) => p.categoria === filters.category)
+            : dashboard.topProducts}
+        />
       </section>
     </div>
   );
