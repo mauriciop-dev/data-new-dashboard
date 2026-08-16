@@ -109,13 +109,18 @@ export function normalizeDashboard(raw: {
   };
 }
 
-export function useDashboardData() {
+export function useDashboardData(filters?: { category: string | null; month: string | null }) {
   const { dashboard, setDashboard, setDashboardError } = useDashboard();
 
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/dashboard", { cache: "no-store" })
+    const params = new URLSearchParams();
+    if (filters?.category) params.set("category", filters.category);
+    if (filters?.month) params.set("month", filters.month);
+    const url = `/api/dashboard${params.toString() ? `?${params.toString()}` : ""}`;
+
+    fetch(url, { cache: "no-store" })
       .then((res) => {
         if (!res.ok) {
           return res.json().then((j) => {
@@ -137,7 +142,7 @@ export function useDashboardData() {
     return () => {
       cancelled = true;
     };
-  }, [setDashboard, setDashboardError]);
+  }, [setDashboard, setDashboardError, filters?.category, filters?.month]);
 
   return { dashboard };
 }

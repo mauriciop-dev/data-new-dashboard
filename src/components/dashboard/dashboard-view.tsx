@@ -22,7 +22,12 @@ import { TopProductsTable } from "./data-tables";
 import { cn } from "@/lib/utils";
 
 export default function DashboardView() {
-  useDashboardData();
+  const [filters, setFilters] = useState<Filters>({
+    category: null,
+    month: null,
+  });
+
+  useDashboardData(filters);
 
   const {
     dashboard,
@@ -35,11 +40,6 @@ export default function DashboardView() {
     setCurrentChart,
   } = useDashboard();
 
-  const [filters, setFilters] = useState<Filters>({
-    category: null,
-    month: null,
-  });
-
   const mainSeries = useMemo(() => {
     if (!dashboard) return { name: "", data: [] as Record<string, string | number>[] };
     return { name: dashboard.mainSeries.name, data: dashboard.mainSeries.data };
@@ -47,24 +47,16 @@ export default function DashboardView() {
 
   const categorySeries = useMemo(() => {
     if (!dashboard) return { name: "", data: [] as Record<string, string | number>[] };
-    let data = dashboard.categorySeries.data;
-    if (filters.category) {
-      data = data.filter((d) => d.categoria === filters.category);
-    }
-    return { name: dashboard.categorySeries.name, data };
-  }, [dashboard, filters.category]);
+    return { name: dashboard.categorySeries.name, data: dashboard.categorySeries.data };
+  }, [dashboard]);
 
   const topSeries = useMemo(() => {
     if (!dashboard) return [] as Record<string, string | number>[];
-    let products = dashboard.topProducts;
-    if (filters.category) {
-      products = products.filter((p) => p.categoria === filters.category);
-    }
-    return products.map((p) => ({
+    return dashboard.topProducts.map((p) => ({
       title: p.title.length > 22 ? p.title.slice(0, 21) + "…" : p.title,
       Ventas: p.total,
     }));
-  }, [dashboard, filters.category]);
+  }, [dashboard]);
 
   if (loading) {
     return (
@@ -141,7 +133,7 @@ export default function DashboardView() {
         {showGeneratedChart ? (
           <DynamicMainChart result={currentChart} />
         ) : (
-          <MainTrendChart series={mainSeries} activeKey={filters.month} />
+          <MainTrendChart series={mainSeries} />
         )}
       </section>
 
@@ -203,11 +195,7 @@ export default function DashboardView() {
             </span>
           )}
         </div>
-        <TopProductsTable
-          rows={filters.category
-            ? dashboard.topProducts.filter((p) => p.categoria === filters.category)
-            : dashboard.topProducts}
-        />
+        <TopProductsTable rows={dashboard.topProducts} />
       </section>
     </div>
   );

@@ -30,17 +30,33 @@ export interface SalesByMonth {
   orders: number;
 }
 
-export async function fetchSalesMetrics(): Promise<SalesMetrics> {
+export async function fetchSalesMetrics(category?: string, month?: string): Promise<SalesMetrics> {
   const db = getDb();
-  const res = await db.execute(`
-    SELECT
-      ROUND(SUM(total), 2) AS total_sales,
-      ROUND(SUM(discounted_total), 2) AS total_discounted_sales,
-      COUNT(DISTINCT cart_id) AS total_orders,
-      ROUND(SUM(quantity)) AS total_products_sold,
-      COUNT(*) AS total_items
-    FROM ventas
-  `);
+  const where: string[] = [];
+  const args: (string | number)[] = [];
+  if (category) {
+    where.push(`c.categoria = ?`);
+    args.push(category);
+  }
+  if (month) {
+    where.push(`substr(v.date, 1, 7) = ?`);
+    args.push(month);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const res = await db.execute({
+    sql: `
+      SELECT
+        ROUND(SUM(v.total), 2) AS total_sales,
+        ROUND(SUM(v.discounted_total), 2) AS total_discounted_sales,
+        COUNT(DISTINCT v.cart_id) AS total_orders,
+        ROUND(SUM(v.quantity)) AS total_products_sold,
+        COUNT(*) AS total_items
+      FROM ventas v
+      LEFT JOIN categorias c ON c.product_id = v.product_id
+      ${whereSql}
+    `,
+    args,
+  });
   const row = res.rows[0] as unknown as Record<string, number>;
   const totalSales = Number(row.total_sales ?? 0);
   const totalOrders = Number(row.total_orders ?? 0);
@@ -54,17 +70,24 @@ export async function fetchSalesMetrics(): Promise<SalesMetrics> {
   };
 }
 
-export async function fetchSalesByMonth(): Promise<SalesByMonth[]> {
+export async function fetchSalesByMonth(category?: string): Promise<SalesByMonth[]> {
   const db = getDb();
-  const res = await db.execute(`
-    SELECT
-      substr(date, 1, 7) AS month,
-      ROUND(SUM(total), 2) AS total,
-      COUNT(DISTINCT cart_id) AS orders
-    FROM ventas
-    GROUP BY month
-    ORDER BY month
-  `);
+  const where = category ? "WHERE c.categoria = ?" : "";
+  const args = category ? [category] : [];
+  const res = await db.execute({
+    sql: `
+      SELECT
+        substr(v.date, 1, 7) AS month,
+        ROUND(SUM(v.total), 2) AS total,
+        COUNT(DISTINCT v.cart_id) AS orders
+      FROM ventas v
+      LEFT JOIN categorias c ON c.product_id = v.product_id
+      ${where}
+      GROUP BY month
+      ORDER BY month
+    `,
+    args,
+  });
   return res.rows.map((r) => {
     const row = r as unknown as Record<string, number | string>;
     return {
@@ -82,19 +105,25 @@ export interface SalesByCategory {
   total: number;
 }
 
-export async function fetchSalesByCategory(): Promise<SalesByCategory[]> {
+export async function fetchSalesByCategory(month?: string): Promise<SalesByCategory[]> {
   const db = getDb();
-  const res = await db.execute(`
-    SELECT
-      COALESCE(c.categoria, 'Otros') AS categoria,
-      SUM(v.quantity) AS units,
-      COUNT(DISTINCT v.cart_id) AS orders,
-      ROUND(SUM(v.total), 2) AS total
-    FROM ventas v
-    LEFT JOIN categorias c ON c.product_id = v.product_id
-    GROUP BY categoria
-    ORDER BY total DESC
-  `);
+  const where = month ? "WHERE substr(v.date, 1, 7) = ?" : "";
+  const args = month ? [month] : [];
+  const res = await db.execute({
+    sql: `
+      SELECT
+        COALESCE(c.categoria, 'Otros') AS categoria,
+        SUM(v.quantity) AS units,
+        COUNT(DISTINCT v.cart_id) AS orders,
+        ROUND(SUM(v.total), 2) AS total
+      FROM ventas v
+      LEFT JOIN categorias c ON c.product_id = v.product_id
+      ${where}
+      GROUP BY categoria
+      ORDER BY total DESC
+    `,
+    args,
+  });
   return res.rows.map((r) => {
     const row = r as unknown as Record<string, number | string>;
     return {
@@ -116,8 +145,20 @@ export interface TopProduct {
   thumbnail: string;
 }
 
-export async function fetchTopProducts(limit = 8): Promise<TopProduct[]> {
+export async function fetchTopProducts(limit = 8, category?: string, month?: string): Promise<TopProduct[]> {
   const db = getDb();
+  const where: string[] = [];
+  const args: (string | number)[] = [];
+  if (category) {
+    where.push(`c.categoria = ?`);
+    args.push(category);
+  }
+  if (month) {
+    where.push(`substr(v.date, 1, 7) = ?`);
+    args.push(month);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  args.push(limit);
   const res = await db.execute({
     sql: `SELECT
       v.product_id,
@@ -129,10 +170,11 @@ export async function fetchTopProducts(limit = 8): Promise<TopProduct[]> {
       MAX(v.thumbnail) AS thumbnail
     FROM ventas v
     LEFT JOIN categorias c ON c.product_id = v.product_id
+    ${whereSql}
     GROUP BY v.product_id
     ORDER BY total DESC
     LIMIT ?`,
-    args: [limit],
+    args,
   });
   return res.rows.map((r) => {
     const row = r as unknown as Record<string, number | string | null>;
@@ -158,8 +200,20 @@ export interface RecentOrder {
   thumbnail: string;
 }
 
-export async function fetchRecentOrders(limit = 10): Promise<RecentOrder[]> {
+export async function fetchRecentOrders(limit = 10, category?: string, month?: string): Promise<RecentOrder[]> {
   const db = getDb();
+  const where: string[] = [];
+  const args: (string | number)[] = [];
+  if (category) {
+    where.push(`c.categoria = ?`);
+    args.push(category);
+  }
+  if (month) {
+    where.push(`substr(v.date, 1, 7) = ?`);
+    args.push(month);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  args.push(limit);
   const res = await db.execute({
     sql: `SELECT
       v.cart_id,
@@ -170,9 +224,11 @@ export async function fetchRecentOrders(limit = 10): Promise<RecentOrder[]> {
       ROUND(v.total, 2) AS total,
       v.thumbnail
     FROM ventas v
+    LEFT JOIN categorias c ON c.product_id = v.product_id
+    ${whereSql}
     ORDER BY v.date DESC, v.cart_id DESC
     LIMIT ?`,
-    args: [limit],
+    args,
   });
   return res.rows.map((r) => {
     const row = r as unknown as Record<string, number | string>;

@@ -7,8 +7,12 @@ import {
   fetchFilterOptions,
 } from "@/lib/turso";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url);
+    const category = searchParams.get("category") || undefined;
+    const month = searchParams.get("month") || undefined;
+
     const [
       metrics,
       monthly,
@@ -17,11 +21,11 @@ export async function GET() {
       recentOrders,
       filters,
     ] = await Promise.all([
-      fetchSalesMetrics(),
-      fetchSalesByMonth(),
-      fetchSalesByCategory(),
-      fetchTopProducts(8),
-      fetchRecentOrders(10),
+      fetchSalesMetrics(category, month),
+      fetchSalesByMonth(category),
+      fetchSalesByCategory(month),
+      fetchTopProducts(20, category, month),
+      fetchRecentOrders(20, category, month),
       fetchFilterOptions(),
     ]);
     return Response.json({
@@ -31,6 +35,7 @@ export async function GET() {
       topProducts,
       recentOrders,
       filters,
+      appliedFilters: { category, month },
       fetchedAt: new Date().toISOString(),
     });
   } catch (err) {
