@@ -47,24 +47,22 @@ function ChatPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
 
 function Dashboard({ setChatOpen }: { setChatOpen: (v: boolean) => void }) {
   return (
-    <div className="relative min-h-screen bg-background font-sans">
+    <div className="relative flex h-screen w-full flex-col bg-background font-sans overflow-hidden">
       <ThreeBackground />
 
-      <div className="relative mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6">
-        <header className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-lg">
-                <Activity className="size-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
-                  Pulse Analytics
-                </h1>
-                <p className="text-xs text-muted-foreground">
-                  Centro de Inteligencia Comercial · En vivo
-                </p>
-              </div>
+      <header className="flex-shrink-0 border-b bg-card/70 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-700 shadow-lg">
+              <Activity className="size-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+                Pulse Analytics
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                Centro de Inteligencia Comercial · En vivo
+              </p>
             </div>
           </div>
 
@@ -82,9 +80,14 @@ function Dashboard({ setChatOpen }: { setChatOpen: (v: boolean) => void }) {
               Asistente
             </Button>
           </div>
-        </header>
+        </div>
+      </header>
 
-        <DashboardView />
+      {/* Scrollable dashboard content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-7xl px-4 py-6 sm:px-6">
+          <DashboardView />
+        </div>
       </div>
     </div>
   );
