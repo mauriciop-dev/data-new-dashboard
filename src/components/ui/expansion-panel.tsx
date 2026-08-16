@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,11 @@ export default function ExpansionPanel({
   children: React.ReactNode;
   className?: string;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (defaultOpen) setOpen(true);
+  }, [defaultOpen]);
 
   return (
     <div

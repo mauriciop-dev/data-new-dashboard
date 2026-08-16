@@ -241,7 +241,7 @@ export default function DashboardView() {
       {/* Datos adicionales como panels expandibles */}
       <ExpansionPanel
         title="Productos destacados"
-        defaultOpen={true}
+        defaultOpen={false}
         icon={<Table2 className="size-4 text-muted-foreground" />}
       >
         <TopProductsTable rows={dashboard.topProducts} />
