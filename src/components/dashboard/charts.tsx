@@ -19,6 +19,7 @@ import {
 } from "recharts";
 import type { ChartSeries } from "@/lib/dashboard-store";
 import type { ToolResult } from "@/lib/use-live-voice";
+import { cn } from "@/lib/utils";
 
 const COLORS = [
   "hsl(221 83% 53%)",
@@ -218,10 +219,9 @@ export function DynamicMainChart({
   const valueKey = numericCols[0];
 
   return (
-    <div className={className}>
+    <div className={cn("h-full w-full", className)}>
       <div className="h-80 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          {type === "pie" ? (
+        <ResponsiveContainer width="100%" height="100%">          {type === "pie" ? (
             <PieChart>
               <Pie
                 data={rows}

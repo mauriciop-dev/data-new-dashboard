@@ -1,14 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   BarChart3,
   PieChart,
   Table2,
   Sparkles,
   X,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { useDashboard } from "@/lib/dashboard-store";
 import { useDashboardData } from "@/lib/use-dashboard-data";
@@ -21,6 +19,7 @@ import {
   DynamicMainChart,
 } from "./charts";
 import { TopProductsTable, RecentOrdersTable } from "./data-tables";
+import CubeTransition from "@/components/cube-transition";
 import { cn } from "@/lib/utils";
 import ExpansionPanel from "@/components/ui/expansion-panel";
 
@@ -42,6 +41,17 @@ export default function DashboardView() {
     highlight,
     setCurrentChart,
   } = useDashboard();
+
+  const [cubePhase, setCubePhase] = useState<"idle" | "out" | "in">("idle");
+  const [showChart, setShowChart] = useState(false);
+
+  // Trigger cube transition when currentChart changes
+  useEffect(() => {
+    if (currentChart) {
+      setCubePhase("out");
+      setShowChart(false);
+    }
+  }, [currentChart]);
 
   const mainSeries = useMemo(() => {
     if (!dashboard) return { name: "", data: [] as Record<string, string | number>[] };
@@ -103,11 +113,11 @@ export default function DashboardView() {
         />
       </div>
 
-      {/* Main chart — generated or default */}
+      {/* Main chart — generated or default with cube transition */}
       <section
         data-chart="main"
         className={cn(
-          "rounded-xl border bg-card p-5 shadow-sm transition-all duration-700",
+          "relative rounded-xl border bg-card p-5 shadow-sm transition-all duration-700",
           highlight?.key === "main" && highlight.type === "chart" &&
             "border-emerald-400/70 ring-2 ring-emerald-400/40"
         )}
@@ -121,7 +131,11 @@ export default function DashboardView() {
           </div>
           {showGeneratedChart && (
             <button
-              onClick={() => setCurrentChart(null)}
+              onClick={() => {
+                setShowChart(false);
+                setCubePhase("idle");
+                setCurrentChart(null);
+              }}
               className="inline-flex items-center gap-1 rounded-md border bg-muted px-2 py-1 text-xs text-muted-foreground hover:bg-muted/70"
               aria-label="Restaurar gráfico por defecto"
             >
@@ -143,11 +157,46 @@ export default function DashboardView() {
           </p>
         )}
 
-        {showGeneratedChart ? (
-          <DynamicMainChart result={currentChart} />
-        ) : (
-          <MainTrendChart series={mainSeries} />
-        )}
+        <div className="relative h-80 w-full">
+          {cubePhase === "out" && (
+            <CubeTransition
+              direction="out"
+              onComplete={() => {
+                setCubePhase("in");
+                setShowChart(true);
+              }}
+            />
+          )}
+          {cubePhase === "in" && (
+            <CubeTransition
+              direction="in"
+              onComplete={() => {
+                setCubePhase("idle");
+              }}
+            />
+          )}
+
+          <div
+            className={cn(
+              "absolute inset-0 transition-all duration-500",
+              showChart && cubePhase === "idle"
+                ? "opacity-100"
+                : "pointer-events-none opacity-0"
+            )}
+          >
+            {showGeneratedChart ? (
+              <DynamicMainChart result={currentChart} />
+            ) : (
+              <MainTrendChart series={mainSeries} />
+            )}
+          </div>
+
+          {!showChart && cubePhase === "idle" && !showGeneratedChart && (
+            <div className="absolute inset-0">
+              <MainTrendChart series={mainSeries} />
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Two smaller charts (always visible) */}
