@@ -11,6 +11,13 @@ const THEMES: Record<
   {
     label: string;
     palette: string[];
+    aurora: {
+      base: string;
+      c1: string;
+      c2: string;
+      c3: string;
+      c4: string;
+    };
     speed: number;
     shape: "coins" | "boxes" | "rings" | "orb" | "default";
   }
@@ -24,6 +31,13 @@ const THEMES: Record<
       "hsl(200 80% 60%)",
       "hsl(155 62% 45%)",
     ],
+    aurora: {
+      base: "oklch(0.98 0.02 240)",
+      c1: "oklch(0.78 0.13 230)",
+      c2: "oklch(0.86 0.11 165)",
+      c3: "oklch(0.79 0.14 295)",
+      c4: "oklch(0.83 0.12 210)",
+    },
     speed: 1,
     shape: "default",
   },
@@ -36,6 +50,13 @@ const THEMES: Record<
       "hsl(100 60% 50%)",
       "hsl(150 80% 55%)",
     ],
+    aurora: {
+      base: "oklch(0.98 0.02 165)",
+      c1: "oklch(0.8 0.13 165)",
+      c2: "oklch(0.84 0.12 145)",
+      c3: "oklch(0.78 0.14 190)",
+      c4: "oklch(0.82 0.12 155)",
+    },
     speed: 1.2,
     shape: "coins",
   },
@@ -47,6 +68,13 @@ const THEMES: Record<
       "hsl(250 90% 66%)",
       "hsl(217 91% 60%)",
     ],
+    aurora: {
+      base: "oklch(0.98 0.02 260)",
+      c1: "oklch(0.79 0.14 250)",
+      c2: "oklch(0.82 0.14 295)",
+      c3: "oklch(0.77 0.12 235)",
+      c4: "oklch(0.85 0.11 260)",
+    },
     speed: 1.1,
     shape: "boxes",
   },
@@ -58,6 +86,13 @@ const THEMES: Record<
       "hsl(340 82% 55%)",
       "hsl(0 72% 55%)",
     ],
+    aurora: {
+      base: "oklch(0.98 0.02 45)",
+      c1: "oklch(0.84 0.13 55)",
+      c2: "oklch(0.79 0.14 20)",
+      c3: "oklch(0.8 0.15 350)",
+      c4: "oklch(0.86 0.1 40)",
+    },
     speed: 1.15,
     shape: "rings",
   },
@@ -69,6 +104,13 @@ const THEMES: Record<
       "hsl(187 92% 56%)",
       "hsl(217 91% 60%)",
     ],
+    aurora: {
+      base: "oklch(0.98 0.02 220)",
+      c1: "oklch(0.79 0.13 230)",
+      c2: "oklch(0.86 0.11 190)",
+      c3: "oklch(0.78 0.13 250)",
+      c4: "oklch(0.84 0.12 215)",
+    },
     speed: 1.3,
     shape: "orb",
   },
@@ -115,7 +157,7 @@ const cfg = THEMES[theme] ?? THEMES.default;
       const glowMat = new THREE.MeshBasicMaterial({
         color: palette[0],
         transparent: true,
-        opacity: 0.45,
+        opacity: 0.5,
         side: THREE.BackSide,
         depthWrite: false,
       });
@@ -352,11 +394,25 @@ const cfg = THEMES[theme] ?? THEMES.default;
     }
   }, [theme]);
 
+  const aurora = THEMES[theme]?.aurora ?? THEMES.default.aurora;
+
   return (
     <div
       ref={mountRef}
       aria-hidden
-      className="pointer-events-none fixed inset-0 z-0 opacity-90"
-    />
+      className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
+      style={
+        {
+          "--aurora-1": aurora.c1,
+          "--aurora-2": aurora.c2,
+          "--aurora-3": aurora.c3,
+          "--aurora-4": aurora.c4,
+          "--aurora-base": aurora.base,
+        } as React.CSSProperties
+      }
+    >
+      {/* Capa aurora (gradientes suaves estilo macOS) */}
+      <div className="aurora-background absolute inset-0" />
+    </div>
   );
 }
