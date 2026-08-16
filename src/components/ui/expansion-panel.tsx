@@ -22,7 +22,7 @@ export default function ExpansionPanel({
   return (
     <div
       className={cn(
-        "rounded-xl border bg-card shadow-sm transition-all duration-300",
+        "rounded-xl border bg-card/70 backdrop-blur-xl shadow-sm transition-all duration-300",
         className
       )}
     >
@@ -43,10 +43,12 @@ export default function ExpansionPanel({
       <div
         className={cn(
           "overflow-hidden transition-all duration-300",
-          open ? "max-h-[2000px] opacity-100" : "max-h-0 opacity-0"
+          open ? "max-h-[500px] opacity-100" : "max-h-0 opacity-0"
         )}
       >
-        <div className="px-5 pb-4">{children}</div>
+        <div className="px-5 pb-4">
+          <div className="max-h-[420px] overflow-y-auto">{children}</div>
+        </div>
       </div>
     </div>
   );
