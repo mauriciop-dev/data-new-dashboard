@@ -1,209 +1,221 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import * as THREE from "three";
+import { CSS3DRenderer, CSS3DObject } from "three/examples/jsm/renderers/CSS3DRenderer.js";
+import DashboardPages from "./dashboard/dashboard-pages";
 
 interface CubeTransitionProps {
   onComplete: () => void;
-  direction?: "in" | "out";
+  direction: "in" | "out";
+  /** Página actual (la que se ve al montar el cubo) */
+  page: number;
+  /** Página destino (solo en fase "out") */
+  next?: number | null;
 }
 
+const PAGE_LABELS = ["Resumen", "Productos", "Órdenes"];
+
+/**
+ * Transición de cubo 3D estilo "índice Power BI": cada cara del cubo contiene
+ * una página viva del informe (gráficos + tablas) y el cubo gira sobre su eje Y
+ * 90° para traer al frente la página destino.
+ *
+ * Los elementos de las caras se crean en el effect y el contenido React se
+ * inyecta con createPortal: heredan el contexto del dashboard (store Provider)
+ * sin que React sea propietario de la ubicación del nodo (el CSS3DRenderer los
+ * mueve a su propio contenedor 3D).
+ */
 export default function CubeTransition({
   onComplete,
   direction = "out",
+  page,
+  next,
 }: CubeTransitionProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const faceEls = useRef<(HTMLDivElement | null)[]>([]);
+  const facesReadyRef = useRef(false);
+  const [portalEls, setPortalEls] = useState<(HTMLDivElement | null)[]>([
+    null,
+    null,
+    null,
+    null,
+  ]);
   const doneRef = useRef(false);
+
+  const from = page;
+  const to = next ?? page;
+  const dist = (((to - from) % 3) + 3) % 3; // 0 igual, 1 siguiente, 2 anterior
+  const faces = [
+    from, // frente (página actual)
+    (from + 1) % 3, // derecha
+    ((((3 - from - to) % 3) + 3) % 3), // atrás
+    (from + 2) % 3, // izquierda
+  ];
 
   useEffect(() => {
     const mount = mountRef.current;
-    if (!mount) return;
-    if (typeof window === "undefined") return;
+    if (!mount || typeof window === "undefined") return;
 
-    let renderer: THREE.WebGLRenderer;
-    let scene: THREE.Scene;
-    let camera: THREE.PerspectiveCamera;
-    let frame: number;
-    let disposed = false;
     doneRef.current = false;
+    facesReadyRef.current = false;
+
+    let frame: number;
+    let renderer: CSS3DRenderer | null = null;
+    const scene = new THREE.Scene();
+    const group = new THREE.Object3D();
 
     try {
-      renderer = new THREE.WebGLRenderer({
-        alpha: true,
-        antialias: true,
-        preserveDrawingBuffer: true,
-      });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-      renderer.setSize(mount.clientWidth, mount.clientHeight);
-      renderer.setClearColor(0x000000, 0);
+      const W = mount.clientWidth || 1;
+      const H = mount.clientHeight || 1;
+
+      renderer = new CSS3DRenderer();
+      renderer.setSize(W, H);
+      renderer.domElement.style.position = "absolute";
+      renderer.domElement.style.top = "0";
+      renderer.domElement.style.left = "0";
+      renderer.domElement.style.pointerEvents = "none";
+      renderer.domElement.style.overflow = "hidden";
       mount.appendChild(renderer.domElement);
 
-      scene = new THREE.Scene();
-      scene.background = null;
+      const camera = new THREE.PerspectiveCamera(45, W / H, 1, 20000);
+      camera.position.z =
+        H / 2 / Math.tan(((45 / 2) * Math.PI) / 180) + W / 2;
+      camera.lookAt(0, 0, 0);
 
-      camera = new THREE.PerspectiveCamera(
-        45,
-        mount.clientWidth / mount.clientHeight,
-        0.1,
-        100
-      );
-      camera.position.z = 5;
+      const makeFaceEl = () => {
+        const el = document.createElement("div");
+        el.style.width = `${W}px`;
+        el.style.height = `${H}px`;
+        el.style.position = "absolute";
+        el.style.left = "0";
+        el.style.top = "0";
+        el.style.background = "rgba(255,255,255,0.88)";
+        el.style.backdropFilter = "blur(8px)";
+        el.style.borderRadius = "18px";
+        el.style.border = "1px solid rgba(255,255,255,0.9)";
+        el.style.boxShadow =
+          "0 24px 70px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.8)";
+        el.style.overflow = "hidden";
+        el.style.pointerEvents = "none";
+        el.style.contain = "layout paint style";
+        return el;
+      };
 
-      // Cubo real con volumen (depth = width) para que el giro se lea 3D
-      const size = 2.2;
-      const geometry = new THREE.BoxGeometry(size, size, size);
-
-      const faceColors = [
-        "#2563eb", // +x azul
-        "#7c3aed", // -x violeta
-        "#10b981", // +y verde
-        "#0ea5e9", // -y cian
-        "#f97316", // +z ámbar
-        "#ec4899", // -z rosa
-      ].map(
-        (color) =>
-          new THREE.MeshBasicMaterial({
-            color,
-            transparent: true,
-            opacity: 0.95,
-            side: THREE.DoubleSide,
-          })
-      );
-
-      const cube = new THREE.Mesh(geometry, faceColors);
-      scene.add(cube);
-
-      // Aristas con grosor simulado: dos líneas paralelas por arista para que se lean bien
-      const edges = new THREE.EdgesGeometry(geometry);
-      const edgeMat = new THREE.LineBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 1,
+      const thetas = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+      faceEls.current = thetas.map((theta, i) => {
+        const el = makeFaceEl();
+        const obj = new CSS3DObject(el);
+        obj.rotation.y = theta;
+        if (i === 0) obj.position.z = W / 2; // frente
+        else if (i === 2) obj.position.z = -W / 2; // atrás
+        else obj.position.x = Math.sign(theta) * (W / 2); // lados
+        group.add(obj);
+        return el;
       });
-      const edgeLines = new THREE.LineSegments(edges, edgeMat);
-      edgeLines.scale.setScalar(1.002);
-      cube.add(edgeLines);
+      setPortalEls([...faceEls.current]);
 
-      // Segunda capa de aristas un poco más pequeña para dar grosor visual (efecto marco)
-      const edgeMat2 = new THREE.LineBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.55,
-      });
-      const edgeLines2 = new THREE.LineSegments(
-        new THREE.EdgesGeometry(new THREE.BoxGeometry(size * 0.99, size * 0.99, size * 0.99)),
-        edgeMat2
-      );
-      cube.add(edgeLines2);
+      // Caras arriba/abajo (estáticas, cierran el cubo)
+      const makeStatEl = (label: string) => {
+        const el = document.createElement("div");
+        el.style.width = `${W}px`;
+        el.style.height = `${H}px`;
+        el.style.position = "absolute";
+        el.style.background =
+          "linear-gradient(135deg, rgba(255,255,255,0.95), rgba(59,130,246,0.2))";
+        el.style.borderRadius = "18px";
+        el.style.display = "flex";
+        el.style.alignItems = "center";
+        el.style.justifyContent = "center";
+        el.style.fontWeight = "700";
+        el.style.fontSize = "24px";
+        el.style.color = "#0f172a";
+        el.style.fontFamily = "system-ui, sans-serif";
+        el.textContent = label;
+        el.style.pointerEvents = "none";
+        return el;
+      };
 
-      // Puntos en los 8 vértices para reforzar el volumen
-      const vertsGeo = new THREE.BufferGeometry();
-      const h = size / 2;
-      const verts = new Float32Array([
-        -h, -h, -h, h, -h, -h, h, h, -h, -h, h, -h,
-        -h, -h, h, h, -h, h, h, h, h, -h, h, h,
-      ]);
-      vertsGeo.setAttribute("position", new THREE.BufferAttribute(verts, 3));
-      const vertsMat = new THREE.PointsMaterial({
-        color: 0xffffff,
-        size: 0.1,
-        transparent: true,
-        opacity: 1,
-      });
-      const vertsPts = new THREE.Points(vertsGeo, vertsMat);
-      cube.add(vertsPts);
+      const topEl = makeStatEl("Pulse Analytics");
+      const topObj = new CSS3DObject(topEl);
+      topObj.rotation.x = Math.PI / 2;
+      topObj.position.y = H / 2;
+      topObj.scale.set(1, W / H, 1);
+      const bottomEl = makeStatEl("Panel en vivo");
+      const bottomObj = new CSS3DObject(bottomEl);
+      bottomObj.rotation.x = -Math.PI / 2;
+      bottomObj.position.y = -H / 2;
+      bottomObj.scale.set(1, W / H, 1);
+      group.add(topObj);
+      group.add(bottomObj);
 
-      const startTime = Date.now();
-      const DURATION = 1.5;
+      scene.add(group);
+
+      const start = Date.now();
+      const DURATION_OUT = 0.95;
+      const DURATION_IN = 0.55;
+      const duration = direction === "out" ? DURATION_OUT : DURATION_IN;
+
+      // Giro: siguiente (destino a la derecha) gira −90°, anterior gira +90°.
+      const targetAngle =
+        direction === "out"
+          ? dist === 2
+            ? Math.PI / 2
+            : -Math.PI / 2
+          : 0;
+      const focused = direction === "out" ? targetAngle : 0;
 
       const animate = () => {
-        if (disposed) return;
+        if (!renderer) return;
+        const t = Math.min((Date.now() - start) / 1000, duration);
+        const k = t / duration;
+        const eased = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
 
-        const elapsed = (Date.now() - startTime) / 1000;
-        const t = Math.min(elapsed / DURATION, 1);
+        group.rotation.y = focused * eased;
+        const breathe = 1 + (direction === "out" ? 0.02 : 0.03) * (1 - eased);
+        group.scale.setScalar(breathe);
+        if (renderer.domElement) {
+          renderer.domElement.style.opacity = String(
+            direction === "in" ? eased : 1
+          );
+        }
 
-        if (direction === "out") {
-          // Giro completo sobre Y + cabeceo constante en X para ver 3 caras
-          cube.rotation.x = -0.6;
-          cube.rotation.y = elapsed * Math.PI * 2;
-          cube.rotation.z = 0;
-          cube.scale.set(
-            1 + t * 0.55,
-            1 + t * 0.55,
-            1 + t * 0.55
-          );
-          cube.material.forEach((m) => {
-            (m as THREE.MeshBasicMaterial).opacity = 0.95 - t * 0.45;
-          });
-          edgeMat.opacity = 1 - t * 0.5;
-          edgeMat2.opacity = 0.55 - t * 0.3;
-          (vertsMat as THREE.PointsMaterial).opacity = 1 - t * 0.5;
-        } else {
-          cube.rotation.x = 0.6;
-          cube.rotation.y = -elapsed * Math.PI * 2;
-          cube.rotation.z = 0;
-          cube.scale.set(
-            Math.max(0.01, 1.55 - elapsed * 0.55),
-            Math.max(0.01, 1.55 - elapsed * 0.55),
-            Math.max(0.01, 1.55 - elapsed * 0.55)
-          );
-          cube.material.forEach((m) => {
-            (m as THREE.MeshBasicMaterial).opacity = Math.min(
-              0.95,
-              elapsed * 0.65
-            );
-          });
-          edgeMat.opacity = Math.min(1, elapsed * 0.7);
-          edgeMat2.opacity = Math.min(0.55, elapsed * 0.4);
-          (vertsMat as THREE.PointsMaterial).opacity = Math.min(
-            1,
-            elapsed * 0.7
-          );
+        if (eased >= 1 && !doneRef.current) {
+          doneRef.current = true;
+          onComplete();
         }
 
         renderer.render(scene, camera);
         frame = requestAnimationFrame(animate);
-
-        if (t >= 1 && !doneRef.current) {
-          doneRef.current = true;
-          onComplete();
-        }
       };
       animate();
-
-      const onResize = () => {
-        if (!mount) return;
-        renderer.setSize(mount.clientWidth, mount.clientHeight);
-        camera.aspect = mount.clientWidth / mount.clientHeight;
-        camera.updateProjectionMatrix();
-      };
-      window.addEventListener("resize", onResize);
-
-      return () => {
-        disposed = true;
-        cancelAnimationFrame(frame);
-        window.removeEventListener("resize", onResize);
-        geometry.dispose();
-        faceColors.forEach((m) => m.dispose());
-        edges.dispose();
-        edgeMat.dispose();
-        vertsGeo.dispose();
-        vertsMat.dispose();
-        renderer.dispose();
-        if (renderer.domElement.parentNode === mount) {
-          mount.removeChild(renderer.domElement);
-        }
-      };
+      facesReadyRef.current = true;
     } catch {
       onComplete();
       return;
     }
-  }, [onComplete, direction]);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      if (renderer && renderer.domElement.parentNode === mount) {
+        mount.removeChild(renderer.domElement);
+      }
+      faceEls.current = [];
+      setPortalEls([null, null, null, null]);
+    };
+  }, [onComplete, direction, page, next, dist]);
 
   return (
     <div
       ref={mountRef}
       className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center"
-    />
+    >
+      {portalEls.map((el, i) =>
+        el ? (
+          createPortal(<DashboardPages page={faces[i]} />, el)
+        ) : null
+      )}
+    </div>
   );
 }

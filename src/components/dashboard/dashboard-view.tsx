@@ -143,6 +143,8 @@ export default function DashboardView() {
         {cubePhase !== "idle" && (
           <CubeTransition
             direction={cubePhase}
+            page={page}
+            next={cubePhase === "out" ? nextPage : null}
             onComplete={
               cubePhase === "out" ? handleCubeOut : handleCubeIn
             }
