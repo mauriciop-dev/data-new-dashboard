@@ -104,7 +104,7 @@ export default function DashboardView() {
       <KpiCards metrics={dashboard.metrics} />
 
       {/* Filtros (sticky) */}
-      <div className="rounded-xl border bg-card p-4 shadow-sm">
+      <div className="rounded-xl border bg-card/70 backdrop-blur-xl p-4 shadow-sm">
         <DashboardFilters
           categories={dashboard.filters.categories}
           months={dashboard.filters.months}
@@ -117,7 +117,7 @@ export default function DashboardView() {
       <section
         data-chart="main"
         className={cn(
-          "relative rounded-xl border bg-card p-5 shadow-sm transition-all duration-700",
+          "relative rounded-xl border bg-card/70 backdrop-blur-xl p-5 shadow-sm transition-all duration-700",
           highlight?.key === "main" && highlight.type === "chart" &&
             "border-emerald-400/70 ring-2 ring-emerald-400/40"
         )}
@@ -204,7 +204,7 @@ export default function DashboardView() {
         <section
           data-chart="categorias"
           className={cn(
-            "rounded-xl border bg-card p-5 shadow-sm transition-all duration-700",
+            "rounded-xl border bg-card/70 backdrop-blur-xl p-5 shadow-sm transition-all duration-700",
             highlight?.key === "categorias" &&
               "border-emerald-400/70 ring-2 ring-emerald-400/40"
           )}
@@ -222,7 +222,7 @@ export default function DashboardView() {
         <section
           data-chart="top-productos"
           className={cn(
-            "rounded-xl border bg-card p-5 shadow-sm transition-all duration-700",
+            "rounded-xl border bg-card/70 backdrop-blur-xl p-5 shadow-sm transition-all duration-700",
             highlight?.key === "top-productos" &&
               "border-emerald-400/70 ring-2 ring-emerald-400/40"
           )}

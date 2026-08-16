@@ -53,7 +53,7 @@ export default function KpiCards({
             key={kpi.key}
             data-kpi={kpi.key}
             className={cn(
-              "group relative overflow-hidden rounded-xl border bg-card p-5 shadow-sm transition-all duration-700",
+              "group relative overflow-hidden rounded-xl border bg-card/70 backdrop-blur-xl p-5 shadow-sm transition-all duration-700",
               active
                 ? "border-emerald-400/70 ring-2 ring-emerald-400/40 shadow-[0_0_24px_rgba(16,185,129,0.35)]"
                 : "hover:shadow-md"
