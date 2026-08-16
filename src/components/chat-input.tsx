@@ -71,6 +71,8 @@ export default function ChatInput() {
         <div className="relative flex-1">
           <MessageSquare className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <input
+            id="chat-pregunta"
+            name="pregunta"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {

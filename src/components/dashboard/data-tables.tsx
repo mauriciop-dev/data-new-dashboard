@@ -116,11 +116,11 @@ export function RecentOrdersTable({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => {
+            {rows.map((row, i) => {
               const active = highlight?.key === String(row.cart_id);
               return (
                 <tr
-                  key={`${row.cart_id}-${row.title}`}
+                  key={`${row.cart_id}-${row.title}-${i}`}
                   className={cn(
                     "border-b last:border-0 transition-colors",
                     active
